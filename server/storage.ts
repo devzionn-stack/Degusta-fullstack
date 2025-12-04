@@ -24,6 +24,18 @@ import {
 import { db } from "./db";
 import { eq, and, desc, or, inArray, sql } from "drizzle-orm";
 
+export interface DailySales {
+  date: string;
+  total: number;
+  count: number;
+}
+
+export interface TopSellingItem {
+  name: string;
+  quantity: number;
+  revenue: number;
+}
+
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
@@ -60,10 +72,14 @@ export interface IStorage {
   
   getPedidos(tenantId: string): Promise<Pedido[]>;
   getPedidosByStatus(tenantId: string, statuses: string[]): Promise<Pedido[]>;
+  getPedidosFiltered(tenantId: string, filters: { status?: string; startDate?: Date; endDate?: Date }): Promise<Pedido[]>;
   getPedido(id: string, tenantId: string): Promise<Pedido | undefined>;
   createPedido(pedido: InsertPedido): Promise<Pedido>;
   updatePedido(id: string, tenantId: string, pedido: Partial<InsertPedido>): Promise<Pedido | undefined>;
   deletePedido(id: string, tenantId: string): Promise<boolean>;
+
+  getDailySales(tenantId: string, days: number): Promise<DailySales[]>;
+  getTopSellingItems(tenantId: string, limit: number): Promise<TopSellingItem[]>;
 
   getLogsN8n(tenantId: string): Promise<LogN8n[]>;
   createLogN8n(log: InsertLogN8n): Promise<LogN8n>;
@@ -294,6 +310,28 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(pedidos.createdAt));
   }
 
+  async getPedidosFiltered(tenantId: string, filters: { status?: string; startDate?: Date; endDate?: Date }): Promise<Pedido[]> {
+    const conditions = [eq(pedidos.tenantId, tenantId)];
+    
+    if (filters.status && filters.status !== 'todos') {
+      conditions.push(eq(pedidos.status, filters.status));
+    }
+    
+    if (filters.startDate) {
+      conditions.push(sql`${pedidos.createdAt} >= ${filters.startDate}`);
+    }
+    
+    if (filters.endDate) {
+      conditions.push(sql`${pedidos.createdAt} <= ${filters.endDate}`);
+    }
+    
+    return await db
+      .select()
+      .from(pedidos)
+      .where(and(...conditions))
+      .orderBy(desc(pedidos.createdAt));
+  }
+
   async getPedido(id: string, tenantId: string): Promise<Pedido | undefined> {
     const [pedido] = await db
       .select()
@@ -341,6 +379,62 @@ export class DatabaseStorage implements IStorage {
       .values(insertLog)
       .returning();
     return log;
+  }
+
+  async getDailySales(tenantId: string, days: number): Promise<DailySales[]> {
+    const result = await db.execute(sql`
+      SELECT 
+        DATE(created_at) as date,
+        COALESCE(SUM(CAST(total AS DECIMAL)), 0) as total,
+        COUNT(*) as count
+      FROM pedidos 
+      WHERE tenant_id = ${tenantId}
+        AND created_at >= NOW() - INTERVAL '${sql.raw(String(days))} days'
+        AND status != 'cancelado'
+      GROUP BY DATE(created_at)
+      ORDER BY date DESC
+    `);
+    
+    return (result.rows as any[]).map(row => ({
+      date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date),
+      total: parseFloat(row.total) || 0,
+      count: parseInt(row.count) || 0,
+    }));
+  }
+
+  async getTopSellingItems(tenantId: string, limit: number): Promise<TopSellingItem[]> {
+    const allPedidos = await db
+      .select()
+      .from(pedidos)
+      .where(and(
+        eq(pedidos.tenantId, tenantId),
+        sql`${pedidos.status} != 'cancelado'`
+      ));
+
+    const itemStats: Record<string, { quantity: number; revenue: number }> = {};
+
+    for (const pedido of allPedidos) {
+      const itens = pedido.itens as any[];
+      if (!Array.isArray(itens)) continue;
+      
+      for (const item of itens) {
+        const nome = item.nome || 'Item desconhecido';
+        if (!itemStats[nome]) {
+          itemStats[nome] = { quantity: 0, revenue: 0 };
+        }
+        itemStats[nome].quantity += item.quantidade || 0;
+        itemStats[nome].revenue += (item.quantidade || 0) * (item.precoUnitario || 0);
+      }
+    }
+
+    return Object.entries(itemStats)
+      .map(([name, stats]) => ({
+        name,
+        quantity: stats.quantity,
+        revenue: stats.revenue,
+      }))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, limit);
   }
 }
 

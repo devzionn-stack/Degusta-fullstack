@@ -23,6 +23,7 @@ import {
   X,
   ChevronDown,
   ChefHat,
+  DollarSign,
 } from "lucide-react";
 import { useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
@@ -38,6 +39,8 @@ const navItems = [
   { icon: Users, label: "Clientes", path: "/dashboard/clientes" },
   { icon: Package, label: "Produtos", path: "/dashboard/produtos" },
   { icon: Warehouse, label: "Estoque", path: "/dashboard/estoque" },
+  { icon: DollarSign, label: "Financeiro", path: "/dashboard/financeiro" },
+  { icon: Settings, label: "Configurações", path: "/dashboard/configuracoes" },
 ];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {

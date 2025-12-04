@@ -665,6 +665,63 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // ANALYTICS ROUTES
+  // ============================================
+
+  app.get("/api/analytics/daily-sales", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const days = parseInt(req.query.days as string) || 7;
+      const dailySales = await storage.getDailySales(tenantId, days);
+      res.json(dailySales);
+    } catch (error) {
+      console.error("Error fetching daily sales:", error);
+      res.status(500).json({ error: "Failed to fetch daily sales" });
+    }
+  });
+
+  app.get("/api/analytics/top-items", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const limit = parseInt(req.query.limit as string) || 5;
+      const topItems = await storage.getTopSellingItems(tenantId, limit);
+      res.json(topItems);
+    } catch (error) {
+      console.error("Error fetching top items:", error);
+      res.status(500).json({ error: "Failed to fetch top items" });
+    }
+  });
+
+  app.get("/api/pedidos/filtered", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { status, startDate, endDate } = req.query;
+      
+      const filters: { status?: string; startDate?: Date; endDate?: Date } = {};
+      
+      if (status && typeof status === 'string') {
+        filters.status = status;
+      }
+      
+      if (startDate && typeof startDate === 'string') {
+        filters.startDate = new Date(startDate);
+      }
+      
+      if (endDate && typeof endDate === 'string') {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filters.endDate = end;
+      }
+      
+      const pedidos = await storage.getPedidosFiltered(tenantId, filters);
+      res.json(pedidos);
+    } catch (error) {
+      console.error("Error fetching filtered pedidos:", error);
+      res.status(500).json({ error: "Failed to fetch pedidos" });
+    }
+  });
+
   app.post("/api/n8n/generate-api-key", requireAuth, requireTenant, async (req, res) => {
     try {
       const tenantId = req.user!.tenantId!;
