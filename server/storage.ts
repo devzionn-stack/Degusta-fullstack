@@ -22,7 +22,7 @@ import {
   logsN8n,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, or, inArray, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -51,9 +51,15 @@ export interface IStorage {
   
   getEstoque(tenantId: string): Promise<Estoque[]>;
   getEstoqueByProduto(produtoId: string, tenantId: string): Promise<Estoque | undefined>;
+  createEstoque(estoque: InsertEstoque): Promise<Estoque>;
   updateEstoque(id: string, tenantId: string, estoque: Partial<InsertEstoque>): Promise<Estoque | undefined>;
+  decrementEstoque(produtoId: string, tenantId: string, quantidade: number): Promise<boolean>;
+  
+  getProdutoByNome(nome: string, tenantId: string): Promise<Produto | undefined>;
+  getProdutosByIds(ids: string[], tenantId: string): Promise<Produto[]>;
   
   getPedidos(tenantId: string): Promise<Pedido[]>;
+  getPedidosByStatus(tenantId: string, statuses: string[]): Promise<Pedido[]>;
   getPedido(id: string, tenantId: string): Promise<Pedido | undefined>;
   createPedido(pedido: InsertPedido): Promise<Pedido>;
   updatePedido(id: string, tenantId: string, pedido: Partial<InsertPedido>): Promise<Pedido | undefined>;
@@ -223,8 +229,69 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
+  async createEstoque(insertEstoque: InsertEstoque): Promise<Estoque> {
+    const [estoqueItem] = await db
+      .insert(estoque)
+      .values(insertEstoque)
+      .returning();
+    return estoqueItem;
+  }
+
+  async decrementEstoque(produtoId: string, tenantId: string, quantidade: number): Promise<boolean> {
+    const [updated] = await db
+      .update(estoque)
+      .set({ 
+        quantidade: sql`quantidade - ${quantidade}`,
+        updatedAt: new Date() 
+      })
+      .where(and(
+        eq(estoque.produtoId, produtoId), 
+        eq(estoque.tenantId, tenantId)
+      ))
+      .returning();
+    return !!updated;
+  }
+
+  async getProdutoByNome(nome: string, tenantId: string): Promise<Produto | undefined> {
+    const [produto] = await db
+      .select()
+      .from(produtos)
+      .where(and(
+        sql`LOWER(${produtos.nome}) = LOWER(${nome})`,
+        eq(produtos.tenantId, tenantId)
+      ));
+    return produto || undefined;
+  }
+
+  async getProdutosByIds(ids: string[], tenantId: string): Promise<Produto[]> {
+    if (ids.length === 0) return [];
+    return await db
+      .select()
+      .from(produtos)
+      .where(and(
+        inArray(produtos.id, ids),
+        eq(produtos.tenantId, tenantId)
+      ));
+  }
+
   async getPedidos(tenantId: string): Promise<Pedido[]> {
-    return await db.select().from(pedidos).where(eq(pedidos.tenantId, tenantId));
+    return await db
+      .select()
+      .from(pedidos)
+      .where(eq(pedidos.tenantId, tenantId))
+      .orderBy(desc(pedidos.createdAt));
+  }
+
+  async getPedidosByStatus(tenantId: string, statuses: string[]): Promise<Pedido[]> {
+    if (statuses.length === 0) return [];
+    return await db
+      .select()
+      .from(pedidos)
+      .where(and(
+        eq(pedidos.tenantId, tenantId),
+        inArray(pedidos.status, statuses)
+      ))
+      .orderBy(desc(pedidos.createdAt));
   }
 
   async getPedido(id: string, tenantId: string): Promise<Pedido | undefined> {

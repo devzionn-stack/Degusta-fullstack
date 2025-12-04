@@ -22,6 +22,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  ChefHat,
 } from "lucide-react";
 import { useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
@@ -32,6 +33,7 @@ interface DashboardLayoutProps {
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+  { icon: ChefHat, label: "Cozinha", path: "/cozinha" },
   { icon: ShoppingBag, label: "Pedidos", path: "/dashboard/pedidos" },
   { icon: Users, label: "Clientes", path: "/dashboard/clientes" },
   { icon: Package, label: "Produtos", path: "/dashboard/produtos" },

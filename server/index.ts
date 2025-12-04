@@ -6,6 +6,7 @@ import { createServer } from "http";
 import { loadUser } from "./auth";
 import { pool } from "./db";
 import connectPgSimple from "connect-pg-simple";
+import { setupWebSocket } from "./websocket";
 
 const app = express();
 const httpServer = createServer(app);
@@ -93,6 +94,8 @@ app.use((req, res, next) => {
 
 (async () => {
   await registerRoutes(httpServer, app);
+  
+  setupWebSocket(httpServer);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

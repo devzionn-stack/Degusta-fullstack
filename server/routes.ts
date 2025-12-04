@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { hashPassword, comparePasswords, requireAuth, requireTenant, regenerateSession } from "./auth";
 import { validateN8nWebhook, generateApiKey } from "./webhook-security";
 import { sendToN8n, notifyN8nNewOrder } from "./n8n-requester";
+import { broadcastNewOrder, broadcastOrderStatusChange } from "./websocket";
 import {
   insertTenantSchema,
   insertClienteSchema,
@@ -382,9 +383,49 @@ export async function registerRoutes(
       if (!pedido) {
         return res.status(404).json({ error: "Pedido not found" });
       }
+      
+      broadcastOrderStatusChange(tenantId, pedido);
+      
       res.json(pedido);
     } catch (error) {
       res.status(500).json({ error: "Failed to update pedido" });
+    }
+  });
+
+  app.get("/api/pedidos/cozinha", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const pedidos = await storage.getPedidosByStatus(tenantId, [
+        "recebido",
+        "em_preparo",
+        "pronto"
+      ]);
+      res.json(pedidos);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch pedidos cozinha" });
+    }
+  });
+
+  app.patch("/api/pedidos/:id/status", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { status } = req.body;
+      
+      const validStatuses = ["recebido", "em_preparo", "pronto", "saiu_entrega", "entregue", "cancelado"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: `Status inválido. Use: ${validStatuses.join(", ")}` });
+      }
+      
+      const pedido = await storage.updatePedido(req.params.id, tenantId, { status });
+      if (!pedido) {
+        return res.status(404).json({ error: "Pedido not found" });
+      }
+      
+      broadcastOrderStatusChange(tenantId, pedido);
+      
+      res.json(pedido);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update pedido status" });
     }
   });
 
@@ -465,7 +506,7 @@ export async function registerRoutes(
         });
       }
 
-      const { cliente: clienteData, itens, total, observacoes, enderecoEntrega } = validation.data;
+      const { cliente: clienteData, itens, observacoes, enderecoEntrega } = validation.data;
 
       let cliente = await storage.getClienteByTelefone(clienteData.telefone || "", tenantId);
       
@@ -479,31 +520,81 @@ export async function registerRoutes(
         });
       }
 
+      const processedItems: Array<{
+        produtoId: string | null;
+        nome: string;
+        quantidade: number;
+        precoUnitario: number;
+        subtotal: number;
+        validado: boolean;
+      }> = [];
+
+      let calculatedTotal = 0;
+      const estoqueErrors: string[] = [];
+
+      for (const item of itens) {
+        let produto = null;
+        
+        if (item.produtoId) {
+          produto = await storage.getProduto(item.produtoId, tenantId);
+        }
+        
+        if (!produto && item.nome) {
+          produto = await storage.getProdutoByNome(item.nome, tenantId);
+        }
+
+        const precoUnitario = produto ? parseFloat(produto.preco) : item.precoUnitario;
+        const subtotal = item.quantidade * precoUnitario;
+        calculatedTotal += subtotal;
+
+        processedItems.push({
+          produtoId: produto?.id || null,
+          nome: produto?.nome || item.nome,
+          quantidade: item.quantidade,
+          precoUnitario,
+          subtotal,
+          validado: !!produto,
+        });
+
+        if (produto) {
+          const estoqueItem = await storage.getEstoqueByProduto(produto.id, tenantId);
+          if (estoqueItem) {
+            if (estoqueItem.quantidade >= item.quantidade) {
+              await storage.decrementEstoque(produto.id, tenantId, item.quantidade);
+            } else {
+              estoqueErrors.push(`Estoque insuficiente para ${produto.nome}: disponível ${estoqueItem.quantidade}, solicitado ${item.quantidade}`);
+            }
+          }
+        }
+      }
+
       const pedido = await storage.createPedido({
         tenantId,
         clienteId: cliente?.id || null,
-        status: "pendente",
-        total: total.toString(),
-        itens: itens.map(item => ({
-          produtoId: item.produtoId || null,
-          nome: item.nome,
-          quantidade: item.quantidade,
-          precoUnitario: item.precoUnitario,
-          subtotal: item.quantidade * item.precoUnitario,
-        })),
-        observacoes: observacoes || null,
+        status: "recebido",
+        total: calculatedTotal.toFixed(2),
+        itens: processedItems,
+        observacoes: observacoes || (estoqueErrors.length > 0 ? `ALERTAS: ${estoqueErrors.join("; ")}` : null),
         enderecoEntrega: enderecoEntrega || clienteData.endereco || null,
         origem: "n8n",
       });
+
+      broadcastNewOrder(tenantId, pedido);
 
       await storage.createLogN8n({
         tenantId,
         tipo: "pedido_recebido",
         endpoint: "/api/webhook/n8n/pedido",
         payload: req.body,
-        resposta: { pedidoId: pedido.id },
+        resposta: { 
+          pedidoId: pedido.id,
+          totalCalculado: calculatedTotal,
+          itensValidados: processedItems.filter(i => i.validado).length,
+          itensTotal: processedItems.length,
+          alertasEstoque: estoqueErrors,
+        },
         status: "sucesso",
-        erro: null,
+        erro: estoqueErrors.length > 0 ? estoqueErrors.join("; ") : null,
       });
 
       res.status(201).json({
@@ -511,6 +602,9 @@ export async function registerRoutes(
         message: "Pedido criado com sucesso",
         pedidoId: pedido.id,
         clienteId: cliente?.id || null,
+        totalCalculado: calculatedTotal,
+        itensValidados: processedItems.filter(i => i.validado).length,
+        alertasEstoque: estoqueErrors,
       });
     } catch (error) {
       console.error("Webhook pedido error:", error);
