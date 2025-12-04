@@ -9,6 +9,8 @@ import {
   type InsertProduto,
   type Estoque,
   type InsertEstoque,
+  type Motoboy,
+  type InsertMotoboy,
   type Pedido,
   type InsertPedido,
   type LogN8n,
@@ -18,6 +20,7 @@ import {
   clientes,
   produtos,
   estoque,
+  motoboys,
   pedidos,
   logsN8n,
 } from "@shared/schema";
@@ -69,6 +72,13 @@ export interface IStorage {
   
   getProdutoByNome(nome: string, tenantId: string): Promise<Produto | undefined>;
   getProdutosByIds(ids: string[], tenantId: string): Promise<Produto[]>;
+
+  getMotoboys(tenantId: string): Promise<Motoboy[]>;
+  getMotoboy(id: string, tenantId: string): Promise<Motoboy | undefined>;
+  getMotoboysByStatus(tenantId: string, status: string): Promise<Motoboy[]>;
+  createMotoboy(motoboy: InsertMotoboy): Promise<Motoboy>;
+  updateMotoboy(id: string, tenantId: string, motoboy: Partial<InsertMotoboy>): Promise<Motoboy | undefined>;
+  deleteMotoboy(id: string, tenantId: string): Promise<boolean>;
   
   getPedidos(tenantId: string): Promise<Pedido[]>;
   getPedidosByStatus(tenantId: string, statuses: string[]): Promise<Pedido[]>;
@@ -80,6 +90,9 @@ export interface IStorage {
 
   getDailySales(tenantId: string, days: number): Promise<DailySales[]>;
   getTopSellingItems(tenantId: string, limit: number): Promise<TopSellingItem[]>;
+
+  getPedidoPublicTracking(pedidoId: string): Promise<Pedido[]>;
+  getPedidoByTrackingToken(token: string): Promise<Pedido | undefined>;
 
   getLogsN8n(tenantId: string): Promise<LogN8n[]>;
   createLogN8n(log: InsertLogN8n): Promise<LogN8n>;
@@ -290,6 +303,49 @@ export class DatabaseStorage implements IStorage {
       ));
   }
 
+  async getMotoboys(tenantId: string): Promise<Motoboy[]> {
+    return await db.select().from(motoboys).where(eq(motoboys.tenantId, tenantId));
+  }
+
+  async getMotoboy(id: string, tenantId: string): Promise<Motoboy | undefined> {
+    const [motoboy] = await db
+      .select()
+      .from(motoboys)
+      .where(and(eq(motoboys.id, id), eq(motoboys.tenantId, tenantId)));
+    return motoboy || undefined;
+  }
+
+  async getMotoboysByStatus(tenantId: string, status: string): Promise<Motoboy[]> {
+    return await db
+      .select()
+      .from(motoboys)
+      .where(and(eq(motoboys.tenantId, tenantId), eq(motoboys.status, status)));
+  }
+
+  async createMotoboy(insertMotoboy: InsertMotoboy): Promise<Motoboy> {
+    const [motoboy] = await db
+      .insert(motoboys)
+      .values(insertMotoboy)
+      .returning();
+    return motoboy;
+  }
+
+  async updateMotoboy(id: string, tenantId: string, motoboyData: Partial<InsertMotoboy>): Promise<Motoboy | undefined> {
+    const [updated] = await db
+      .update(motoboys)
+      .set(motoboyData)
+      .where(and(eq(motoboys.id, id), eq(motoboys.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteMotoboy(id: string, tenantId: string): Promise<boolean> {
+    const result = await db
+      .delete(motoboys)
+      .where(and(eq(motoboys.id, id), eq(motoboys.tenantId, tenantId)));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
   async getPedidos(tenantId: string): Promise<Pedido[]> {
     return await db
       .select()
@@ -362,6 +418,21 @@ export class DatabaseStorage implements IStorage {
       .delete(pedidos)
       .where(and(eq(pedidos.id, id), eq(pedidos.tenantId, tenantId)));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async getPedidoPublicTracking(pedidoId: string): Promise<Pedido[]> {
+    return await db
+      .select()
+      .from(pedidos)
+      .where(eq(pedidos.id, pedidoId));
+  }
+
+  async getPedidoByTrackingToken(token: string): Promise<Pedido | undefined> {
+    const [pedido] = await db
+      .select()
+      .from(pedidos)
+      .where(eq(pedidos.trackingToken, token));
+    return pedido || undefined;
   }
 
   async getLogsN8n(tenantId: string): Promise<LogN8n[]> {

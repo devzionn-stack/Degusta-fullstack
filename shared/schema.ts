@@ -53,16 +53,33 @@ export const estoque = pgTable("estoque", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const motoboys = pgTable("motoboys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  nome: text("nome").notNull(),
+  telefone: text("telefone"),
+  placa: text("placa"),
+  veiculoTipo: text("veiculo_tipo").default('moto'),
+  status: text("status").notNull().default('disponivel'),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const pedidos = pgTable("pedidos", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   clienteId: varchar("cliente_id").references(() => clientes.id, { onDelete: "set null" }),
+  motoboyId: varchar("motoboy_id").references(() => motoboys.id, { onDelete: "set null" }),
   status: text("status").notNull().default('pendente'),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
   itens: jsonb("itens").notNull(),
   observacoes: text("observacoes"),
   enderecoEntrega: text("endereco_entrega"),
   origem: text("origem").default('sistema'),
+  trackingLink: text("tracking_link"),
+  trackingToken: text("tracking_token"),
+  trackingStatus: text("tracking_status"),
+  trackingData: jsonb("tracking_data"),
+  trackingStartedAt: timestamp("tracking_started_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -117,6 +134,11 @@ export const insertEstoqueSchema = createInsertSchema(estoque).omit({
   updatedAt: true,
 });
 
+export const insertMotoboySchema = createInsertSchema(motoboys).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertPedidoSchema = createInsertSchema(pedidos).omit({
   id: true,
   createdAt: true,
@@ -166,6 +188,9 @@ export type InsertProduto = z.infer<typeof insertProdutoSchema>;
 
 export type Estoque = typeof estoque.$inferSelect;
 export type InsertEstoque = z.infer<typeof insertEstoqueSchema>;
+
+export type Motoboy = typeof motoboys.$inferSelect;
+export type InsertMotoboy = z.infer<typeof insertMotoboySchema>;
 
 export type Pedido = typeof pedidos.$inferSelect;
 export type InsertPedido = z.infer<typeof insertPedidoSchema>;

@@ -10,11 +10,13 @@ import {
   insertClienteSchema,
   insertProdutoSchema,
   insertPedidoSchema,
+  insertMotoboySchema,
   loginSchema,
   registerSchema,
   webhookPedidoSchema,
   webhookIndicadorSchema,
 } from "@shared/schema";
+import { iniciarRastreamento, generateSimulatedTrackingData } from "./n2n-service";
 import { fromZodError } from "zod-validation-error";
 
 export async function registerRoutes(
@@ -498,6 +500,210 @@ export async function registerRoutes(
       res.json(estoqueItem);
     } catch (error) {
       res.status(500).json({ error: "Failed to update estoque" });
+    }
+  });
+
+  // ============================================
+  // MOTOBOYS ROUTES (Multi-tenant)
+  // ============================================
+
+  app.get("/api/motoboys", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const motoboysList = await storage.getMotoboys(tenantId);
+      res.json(motoboysList);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch motoboys" });
+    }
+  });
+
+  app.get("/api/motoboys/disponiveis", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const motoboysList = await storage.getMotoboysByStatus(tenantId, "disponivel");
+      res.json(motoboysList);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch motoboys disponíveis" });
+    }
+  });
+
+  app.get("/api/motoboys/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const motoboy = await storage.getMotoboy(req.params.id, tenantId);
+      if (!motoboy) {
+        return res.status(404).json({ error: "Motoboy not found" });
+      }
+      res.json(motoboy);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch motoboy" });
+    }
+  });
+
+  app.post("/api/motoboys", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const validation = insertMotoboySchema.safeParse({ ...req.body, tenantId });
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: fromZodError(validation.error).toString() 
+        });
+      }
+      const motoboy = await storage.createMotoboy(validation.data);
+      res.status(201).json(motoboy);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create motoboy" });
+    }
+  });
+
+  app.patch("/api/motoboys/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const motoboy = await storage.updateMotoboy(req.params.id, tenantId, req.body);
+      if (!motoboy) {
+        return res.status(404).json({ error: "Motoboy not found" });
+      }
+      res.json(motoboy);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update motoboy" });
+    }
+  });
+
+  app.delete("/api/motoboys/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const success = await storage.deleteMotoboy(req.params.id, tenantId);
+      if (!success) {
+        return res.status(404).json({ error: "Motoboy not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete motoboy" });
+    }
+  });
+
+  // ============================================
+  // TRACKING / DELIVERY ROUTES
+  // ============================================
+
+  app.post("/api/pedidos/:id/iniciar-entrega", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { motoboyId } = req.body;
+
+      if (!motoboyId) {
+        return res.status(400).json({ error: "motoboyId é obrigatório" });
+      }
+
+      const pedido = await storage.getPedido(req.params.id, tenantId);
+      if (!pedido) {
+        return res.status(404).json({ error: "Pedido não encontrado" });
+      }
+
+      const motoboy = await storage.getMotoboy(motoboyId, tenantId);
+      if (!motoboy) {
+        return res.status(404).json({ error: "Motoboy não encontrado" });
+      }
+
+      const trackingResult = await iniciarRastreamento(req.params.id, motoboyId, tenantId);
+      
+      if (!trackingResult.success) {
+        return res.status(500).json({ error: trackingResult.error || "Erro ao iniciar rastreamento" });
+      }
+
+      const updatedPedido = await storage.updatePedido(req.params.id, tenantId, {
+        motoboyId,
+        status: "saiu_entrega",
+        trackingLink: trackingResult.trackingLink,
+        trackingToken: trackingResult.trackingToken,
+        trackingStatus: "ativo",
+        trackingStartedAt: new Date(),
+      });
+
+      await storage.updateMotoboy(motoboyId, tenantId, { status: "em_entrega" });
+
+      broadcastOrderStatusChange(tenantId, updatedPedido!);
+
+      res.json({
+        success: true,
+        pedido: updatedPedido,
+        trackingLink: trackingResult.trackingLink,
+        message: "Entrega iniciada com sucesso",
+      });
+    } catch (error) {
+      console.error("Erro ao iniciar entrega:", error);
+      res.status(500).json({ error: "Erro ao iniciar entrega" });
+    }
+  });
+
+  app.post("/api/pedidos/:id/finalizar-entrega", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+
+      const pedido = await storage.getPedido(req.params.id, tenantId);
+      if (!pedido) {
+        return res.status(404).json({ error: "Pedido não encontrado" });
+      }
+
+      const updatedPedido = await storage.updatePedido(req.params.id, tenantId, {
+        status: "entregue",
+        trackingStatus: "finalizado",
+      });
+
+      if (pedido.motoboyId) {
+        await storage.updateMotoboy(pedido.motoboyId, tenantId, { status: "disponivel" });
+      }
+
+      broadcastOrderStatusChange(tenantId, updatedPedido!);
+
+      res.json({
+        success: true,
+        pedido: updatedPedido,
+        message: "Entrega finalizada com sucesso",
+      });
+    } catch (error) {
+      console.error("Erro ao finalizar entrega:", error);
+      res.status(500).json({ error: "Erro ao finalizar entrega" });
+    }
+  });
+
+  // ============================================
+  // PUBLIC TRACKING ROUTE (Secure token-based access)
+  // ============================================
+
+  app.get("/api/public/rastreio/:trackingToken", async (req, res) => {
+    try {
+      const { trackingToken } = req.params;
+
+      if (!trackingToken || !trackingToken.startsWith("TRK-")) {
+        return res.status(400).json({ error: "Token de rastreamento inválido" });
+      }
+
+      const pedido = await storage.getPedidoByTrackingToken(trackingToken);
+      if (!pedido) {
+        return res.status(404).json({ error: "Rastreamento não encontrado" });
+      }
+
+      if (!pedido.trackingLink || pedido.trackingStatus === "finalizado") {
+        const isFinished = pedido.trackingStatus === "finalizado" || pedido.status === "entregue";
+        if (!isFinished) {
+          return res.status(404).json({ error: "Rastreamento não disponível" });
+        }
+      }
+
+      const trackingData = generateSimulatedTrackingData(pedido.id);
+
+      res.json({
+        pedidoId: pedido.id.slice(0, 8),
+        status: pedido.status,
+        trackingStatus: pedido.trackingStatus,
+        trackingData,
+        enderecoEntrega: pedido.enderecoEntrega ? pedido.enderecoEntrega.split(',')[0] + "..." : null,
+        createdAt: pedido.createdAt,
+      });
+    } catch (error) {
+      console.error("Erro ao buscar rastreamento:", error);
+      res.status(500).json({ error: "Erro ao buscar rastreamento" });
     }
   });
 

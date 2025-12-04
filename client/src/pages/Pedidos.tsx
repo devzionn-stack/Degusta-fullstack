@@ -23,14 +23,16 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ShoppingBag, Filter, Eye, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { ShoppingBag, Filter, Eye, ChevronLeft, ChevronRight, Search, X, Truck, MapPin, ExternalLink } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUS_OPTIONS = [
   { value: "todos", label: "Todos os Status" },
@@ -66,13 +68,25 @@ interface PedidoItem {
 interface Pedido {
   id: string;
   clienteId: string | null;
+  motoboyId: string | null;
   status: string;
   total: string;
   itens: PedidoItem[];
   observacoes: string | null;
   enderecoEntrega: string | null;
   origem: string | null;
+  trackingLink: string | null;
+  trackingStatus: string | null;
   createdAt: string;
+}
+
+interface Motoboy {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  placa: string | null;
+  veiculoTipo: string | null;
+  status: string;
 }
 
 export default function Pedidos() {
@@ -82,6 +96,54 @@ export default function Pedidos() {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
+  const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false);
+  const [selectedMotoboyId, setSelectedMotoboyId] = useState<string>("");
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: motoboys = [] } = useQuery<Motoboy[]>({
+    queryKey: ["motoboys", "disponiveis"],
+    queryFn: async () => {
+      const res = await fetch("/api/motoboys/disponiveis", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const iniciarEntregaMutation = useMutation({
+    mutationFn: async ({ pedidoId, motoboyId }: { pedidoId: string; motoboyId: string }) => {
+      const res = await fetch(`/api/pedidos/${pedidoId}/iniciar-entrega`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ motoboyId }),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Erro ao iniciar entrega");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+      queryClient.invalidateQueries({ queryKey: ["motoboys"] });
+      setDeliveryDialogOpen(false);
+      setSelectedMotoboyId("");
+      setSelectedPedido(null);
+      toast({
+        title: "Entrega Iniciada!",
+        description: `Rastreamento disponível em: ${data.trackingLink}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const queryParams = new URLSearchParams();
   if (statusFilter !== "todos") queryParams.append("status", statusFilter);
@@ -271,9 +333,9 @@ export default function Pedidos() {
                       <TableHead>ID</TableHead>
                       <TableHead>Data</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Rastreio</TableHead>
                       <TableHead>Itens</TableHead>
                       <TableHead className="text-right">Total</TableHead>
-                      <TableHead>Origem</TableHead>
                       <TableHead className="text-center">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -295,15 +357,41 @@ export default function Pedidos() {
                           </Badge>
                         </TableCell>
                         <TableCell>
+                          {pedido.trackingLink ? (
+                            <a
+                              href={pedido.trackingLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
+                              data-testid={`link-tracking-${pedido.id}`}
+                            >
+                              <MapPin className="h-3 w-3" />
+                              Rastrear
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ) : pedido.status === "pronto" ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs"
+                              onClick={() => {
+                                setSelectedPedido(pedido);
+                                setDeliveryDialogOpen(true);
+                              }}
+                              data-testid={`button-start-delivery-${pedido.id}`}
+                            >
+                              <Truck className="h-3 w-3 mr-1" />
+                              Enviar
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           {Array.isArray(pedido.itens) ? pedido.itens.length : 0} item(s)
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           R$ {parseFloat(pedido.total).toFixed(2)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="capitalize">
-                            {pedido.origem || "sistema"}
-                          </Badge>
                         </TableCell>
                         <TableCell className="text-center">
                           <Button
@@ -430,8 +518,104 @@ export default function Pedidos() {
                     {selectedPedido.origem || "sistema"}
                   </Badge>
                 </div>
+
+                {selectedPedido.trackingLink && (
+                  <div className="pt-2 border-t">
+                    <a
+                      href={selectedPedido.trackingLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800"
+                    >
+                      <MapPin className="h-4 w-4" />
+                      Ver Rastreamento
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </div>
+                )}
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={deliveryDialogOpen} onOpenChange={setDeliveryDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Truck className="h-5 w-5" />
+                Iniciar Entrega
+              </DialogTitle>
+              <DialogDescription>
+                Selecione um motoboy disponível para entregar o pedido #{selectedPedido?.id.slice(0, 8)}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {selectedPedido?.enderecoEntrega && (
+                <div className="p-3 bg-muted rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Endereço de Entrega</p>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedPedido.enderecoEntrega}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="motoboy">Motoboy</Label>
+                <Select
+                  value={selectedMotoboyId}
+                  onValueChange={setSelectedMotoboyId}
+                >
+                  <SelectTrigger id="motoboy" data-testid="select-motoboy">
+                    <SelectValue placeholder="Selecione um motoboy" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {motoboys.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        Nenhum motoboy disponível
+                      </SelectItem>
+                    ) : (
+                      motoboys.map((motoboy) => (
+                        <SelectItem key={motoboy.id} value={motoboy.id}>
+                          {motoboy.nome} {motoboy.placa && `(${motoboy.placa})`}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeliveryDialogOpen(false);
+                  setSelectedMotoboyId("");
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  if (selectedPedido && selectedMotoboyId) {
+                    iniciarEntregaMutation.mutate({
+                      pedidoId: selectedPedido.id,
+                      motoboyId: selectedMotoboyId,
+                    });
+                  }
+                }}
+                disabled={!selectedMotoboyId || iniciarEntregaMutation.isPending}
+                data-testid="button-confirm-delivery"
+              >
+                {iniciarEntregaMutation.isPending ? "Iniciando..." : "Iniciar Entrega"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

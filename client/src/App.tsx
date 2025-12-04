@@ -12,6 +12,7 @@ import Cozinha from "@/pages/Cozinha";
 import Pedidos from "@/pages/Pedidos";
 import Financeiro from "@/pages/Financeiro";
 import Configuracoes from "@/pages/Configuracoes";
+import Rastreio from "@/pages/Rastreio";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/dashboard/financeiro" component={Financeiro} />
       <Route path="/dashboard/configuracoes" component={Configuracoes} />
       <Route path="/cozinha" component={Cozinha} />
+      <Route path="/rastreio/:pedidoId" component={Rastreio} />
       <Route component={NotFound} />
     </Switch>
   );
