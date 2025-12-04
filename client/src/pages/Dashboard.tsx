@@ -6,39 +6,36 @@ import { ShoppingBag, Users, Package, TrendingUp, Clock, CheckCircle2 } from "lu
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const tenantId = user?.tenantId;
+  const hasTenant = !!user?.tenantId;
 
   const { data: pedidos = [] } = useQuery({
-    queryKey: ["pedidos", tenantId],
+    queryKey: ["pedidos"],
     queryFn: async () => {
-      if (!tenantId) return [];
-      const res = await fetch(`/api/pedidos?tenantId=${tenantId}`, { credentials: "include" });
+      const res = await fetch(`/api/pedidos`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!tenantId,
+    enabled: hasTenant,
   });
 
   const { data: clientes = [] } = useQuery({
-    queryKey: ["clientes", tenantId],
+    queryKey: ["clientes"],
     queryFn: async () => {
-      if (!tenantId) return [];
-      const res = await fetch(`/api/clientes?tenantId=${tenantId}`, { credentials: "include" });
+      const res = await fetch(`/api/clientes`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!tenantId,
+    enabled: hasTenant,
   });
 
   const { data: produtos = [] } = useQuery({
-    queryKey: ["produtos", tenantId],
+    queryKey: ["produtos"],
     queryFn: async () => {
-      if (!tenantId) return [];
-      const res = await fetch(`/api/produtos?tenantId=${tenantId}`, { credentials: "include" });
+      const res = await fetch(`/api/produtos`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!tenantId,
+    enabled: hasTenant,
   });
 
   const pendingOrders = pedidos.filter((p: any) => p.status === "pendente").length;
@@ -88,13 +85,13 @@ export default function Dashboard() {
             Bem-vindo, {user?.nome?.split(" ")[0]}!
           </h1>
           <p className="text-muted-foreground mt-1">
-            {tenantId 
+            {hasTenant 
               ? "Aqui está o resumo da sua pizzaria hoje."
               : "Você ainda não está vinculado a uma franquia."}
           </p>
         </div>
 
-        {!tenantId ? (
+        {!hasTenant ? (
           <Card className="border-dashed">
             <CardContent className="pt-6 text-center">
               <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">

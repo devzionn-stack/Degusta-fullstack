@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { type Server } from "http";
 import { storage } from "./storage";
-import { hashPassword, comparePasswords, requireAuth, requireTenant } from "./auth";
+import { hashPassword, comparePasswords, requireAuth, requireTenant, regenerateSession } from "./auth";
 import {
   insertTenantSchema,
   insertClienteSchema,
@@ -37,6 +37,13 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Email já cadastrado" });
       }
 
+      if (tenantId) {
+        const tenant = await storage.getTenant(tenantId);
+        if (!tenant) {
+          return res.status(400).json({ error: "Franquia não encontrada" });
+        }
+      }
+
       const hashedPassword = await hashPassword(password);
       const user = await storage.createUser({
         email,
@@ -46,6 +53,7 @@ export async function registerRoutes(
         role: "user",
       });
 
+      await regenerateSession(req);
       req.session.userId = user.id;
       
       res.status(201).json({
@@ -82,6 +90,7 @@ export async function registerRoutes(
         return res.status(401).json({ error: "Email ou senha inválidos" });
       }
 
+      await regenerateSession(req);
       req.session.userId = user.id;
       
       res.json({
@@ -130,7 +139,7 @@ export async function registerRoutes(
   });
 
   // ============================================
-  // TENANTS ROUTES
+  // TENANTS ROUTES (Admin only in production)
   // ============================================
   
   app.get("/api/tenants", async (req, res) => {
@@ -182,15 +191,12 @@ export async function registerRoutes(
   });
 
   // ============================================
-  // CLIENTES ROUTES (Multi-tenant)
+  // CLIENTES ROUTES (Multi-tenant - uses req.user.tenantId ONLY)
   // ============================================
   
-  app.get("/api/clientes", requireAuth, async (req, res) => {
+  app.get("/api/clientes", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const clientes = await storage.getClientes(tenantId);
       res.json(clientes);
     } catch (error) {
@@ -198,12 +204,9 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/clientes/:id", requireAuth, async (req, res) => {
+  app.get("/api/clientes/:id", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const cliente = await storage.getCliente(req.params.id, tenantId);
       if (!cliente) {
         return res.status(404).json({ error: "Cliente not found" });
@@ -214,9 +217,9 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/clientes", requireAuth, async (req, res) => {
+  app.post("/api/clientes", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.body.tenantId;
+      const tenantId = req.user!.tenantId!;
       const validation = insertClienteSchema.safeParse({ ...req.body, tenantId });
       if (!validation.success) {
         return res.status(400).json({ 
@@ -230,12 +233,9 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/clientes/:id", requireAuth, async (req, res) => {
+  app.patch("/api/clientes/:id", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const cliente = await storage.updateCliente(req.params.id, tenantId, req.body);
       if (!cliente) {
         return res.status(404).json({ error: "Cliente not found" });
@@ -246,12 +246,9 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/clientes/:id", requireAuth, async (req, res) => {
+  app.delete("/api/clientes/:id", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const success = await storage.deleteCliente(req.params.id, tenantId);
       if (!success) {
         return res.status(404).json({ error: "Cliente not found" });
@@ -263,15 +260,12 @@ export async function registerRoutes(
   });
 
   // ============================================
-  // PRODUTOS ROUTES (Multi-tenant)
+  // PRODUTOS ROUTES (Multi-tenant - uses req.user.tenantId ONLY)
   // ============================================
   
-  app.get("/api/produtos", async (req, res) => {
+  app.get("/api/produtos", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const produtos = await storage.getProdutos(tenantId);
       res.json(produtos);
     } catch (error) {
@@ -279,12 +273,9 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/produtos/:id", async (req, res) => {
+  app.get("/api/produtos/:id", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const produto = await storage.getProduto(req.params.id, tenantId);
       if (!produto) {
         return res.status(404).json({ error: "Produto not found" });
@@ -295,9 +286,9 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/produtos", requireAuth, async (req, res) => {
+  app.post("/api/produtos", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.body.tenantId;
+      const tenantId = req.user!.tenantId!;
       const validation = insertProdutoSchema.safeParse({ ...req.body, tenantId });
       if (!validation.success) {
         return res.status(400).json({ 
@@ -311,12 +302,9 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/produtos/:id", requireAuth, async (req, res) => {
+  app.patch("/api/produtos/:id", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const produto = await storage.updateProduto(req.params.id, tenantId, req.body);
       if (!produto) {
         return res.status(404).json({ error: "Produto not found" });
@@ -327,12 +315,9 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/produtos/:id", requireAuth, async (req, res) => {
+  app.delete("/api/produtos/:id", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const success = await storage.deleteProduto(req.params.id, tenantId);
       if (!success) {
         return res.status(404).json({ error: "Produto not found" });
@@ -344,15 +329,12 @@ export async function registerRoutes(
   });
 
   // ============================================
-  // PEDIDOS ROUTES (Multi-tenant)
+  // PEDIDOS ROUTES (Multi-tenant - uses req.user.tenantId ONLY)
   // ============================================
   
-  app.get("/api/pedidos", requireAuth, async (req, res) => {
+  app.get("/api/pedidos", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const pedidos = await storage.getPedidos(tenantId);
       res.json(pedidos);
     } catch (error) {
@@ -360,12 +342,9 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/pedidos/:id", requireAuth, async (req, res) => {
+  app.get("/api/pedidos/:id", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const pedido = await storage.getPedido(req.params.id, tenantId);
       if (!pedido) {
         return res.status(404).json({ error: "Pedido not found" });
@@ -376,9 +355,9 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/pedidos", requireAuth, async (req, res) => {
+  app.post("/api/pedidos", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.body.tenantId;
+      const tenantId = req.user!.tenantId!;
       const validation = insertPedidoSchema.safeParse({ ...req.body, tenantId });
       if (!validation.success) {
         return res.status(400).json({ 
@@ -392,12 +371,9 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/pedidos/:id", requireAuth, async (req, res) => {
+  app.patch("/api/pedidos/:id", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const pedido = await storage.updatePedido(req.params.id, tenantId, req.body);
       if (!pedido) {
         return res.status(404).json({ error: "Pedido not found" });
@@ -408,12 +384,9 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/pedidos/:id", requireAuth, async (req, res) => {
+  app.delete("/api/pedidos/:id", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const success = await storage.deletePedido(req.params.id, tenantId);
       if (!success) {
         return res.status(404).json({ error: "Pedido not found" });
@@ -425,15 +398,12 @@ export async function registerRoutes(
   });
 
   // ============================================
-  // ESTOQUE ROUTES (Multi-tenant)
+  // ESTOQUE ROUTES (Multi-tenant - uses req.user.tenantId ONLY)
   // ============================================
   
-  app.get("/api/estoque", requireAuth, async (req, res) => {
+  app.get("/api/estoque", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const estoque = await storage.getEstoque(tenantId);
       res.json(estoque);
     } catch (error) {
@@ -441,12 +411,9 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/estoque/produto/:produtoId", requireAuth, async (req, res) => {
+  app.get("/api/estoque/produto/:produtoId", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const estoqueItem = await storage.getEstoqueByProduto(req.params.produtoId, tenantId);
       if (!estoqueItem) {
         return res.status(404).json({ error: "Estoque not found" });
@@ -457,12 +424,9 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/estoque/:id", requireAuth, async (req, res) => {
+  app.patch("/api/estoque/:id", requireAuth, requireTenant, async (req, res) => {
     try {
-      const tenantId = req.user?.tenantId || req.query.tenantId as string;
-      if (!tenantId) {
-        return res.status(400).json({ error: "tenantId is required" });
-      }
+      const tenantId = req.user!.tenantId!;
       const estoqueItem = await storage.updateEstoque(req.params.id, tenantId, req.body);
       if (!estoqueItem) {
         return res.status(404).json({ error: "Estoque not found" });

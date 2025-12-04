@@ -72,6 +72,22 @@ export function requireTenant(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+export function regenerateSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const userId = req.session.userId;
+    req.session.regenerate((err) => {
+      if (err) {
+        reject(err);
+      } else {
+        if (userId) {
+          req.session.userId = userId;
+        }
+        resolve();
+      }
+    });
+  });
+}
+
 declare module "express-session" {
   interface SessionData {
     userId: string;

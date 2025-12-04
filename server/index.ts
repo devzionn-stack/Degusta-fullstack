@@ -18,6 +18,11 @@ declare module "http" {
 
 const PgSession = connectPgSimple(session);
 
+const sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret) {
+  console.warn("WARNING: SESSION_SECRET is not set. Using a random secret for this session only.");
+}
+
 app.use(
   session({
     store: new PgSession({
@@ -25,13 +30,14 @@ app.use(
       tableName: "sessions",
       createTableIfMissing: true,
     }),
-    secret: process.env.SESSION_SECRET || "bella-napoli-secret-key-2024",
+    secret: sessionSecret || require("crypto").randomBytes(32).toString("hex"),
     resave: false,
     saveUninitialized: false,
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: "lax",
     },
   })
 );
