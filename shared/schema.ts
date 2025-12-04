@@ -7,6 +7,7 @@ export const tenants = pgTable("tenants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   nome: text("nome").notNull(),
   apiKeyN8n: text("api_key_n8n"),
+  n8nWebhookUrl: text("n8n_webhook_url"),
   status: text("status").notNull().default('active'),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -61,8 +62,21 @@ export const pedidos = pgTable("pedidos", {
   itens: jsonb("itens").notNull(),
   observacoes: text("observacoes"),
   enderecoEntrega: text("endereco_entrega"),
+  origem: text("origem").default('sistema'),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const logsN8n = pgTable("logs_n8n", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  tipo: text("tipo").notNull(),
+  endpoint: text("endpoint").notNull(),
+  payload: jsonb("payload"),
+  resposta: jsonb("resposta"),
+  status: text("status").notNull().default('recebido'),
+  erro: text("erro"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertTenantSchema = createInsertSchema(tenants).omit({
@@ -109,6 +123,35 @@ export const insertPedidoSchema = createInsertSchema(pedidos).omit({
   updatedAt: true,
 });
 
+export const insertLogN8nSchema = createInsertSchema(logsN8n).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const webhookPedidoSchema = z.object({
+  cliente: z.object({
+    nome: z.string(),
+    telefone: z.string().optional(),
+    email: z.string().email().optional(),
+    endereco: z.string().optional(),
+  }),
+  itens: z.array(z.object({
+    produtoId: z.string().optional(),
+    nome: z.string(),
+    quantidade: z.number().min(1),
+    precoUnitario: z.number().min(0),
+  })),
+  total: z.number().min(0),
+  observacoes: z.string().optional(),
+  enderecoEntrega: z.string().optional(),
+});
+
+export const webhookIndicadorSchema = z.object({
+  tipo: z.string(),
+  dados: z.record(z.any()),
+  mensagem: z.string().optional(),
+});
+
 export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
 
@@ -126,3 +169,6 @@ export type InsertEstoque = z.infer<typeof insertEstoqueSchema>;
 
 export type Pedido = typeof pedidos.$inferSelect;
 export type InsertPedido = z.infer<typeof insertPedidoSchema>;
+
+export type LogN8n = typeof logsN8n.$inferSelect;
+export type InsertLogN8n = z.infer<typeof insertLogN8nSchema>;

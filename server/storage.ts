@@ -11,15 +11,18 @@ import {
   type InsertEstoque,
   type Pedido,
   type InsertPedido,
+  type LogN8n,
+  type InsertLogN8n,
   users,
   tenants,
   clientes,
   produtos,
   estoque,
   pedidos,
+  logsN8n,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -29,11 +32,13 @@ export interface IStorage {
   
   getTenants(): Promise<Tenant[]>;
   getTenant(id: string): Promise<Tenant | undefined>;
+  getTenantByApiKey(apiKey: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
   updateTenant(id: string, tenant: Partial<InsertTenant>): Promise<Tenant | undefined>;
   
   getClientes(tenantId: string): Promise<Cliente[]>;
   getCliente(id: string, tenantId: string): Promise<Cliente | undefined>;
+  getClienteByTelefone(telefone: string, tenantId: string): Promise<Cliente | undefined>;
   createCliente(cliente: InsertCliente): Promise<Cliente>;
   updateCliente(id: string, tenantId: string, cliente: Partial<InsertCliente>): Promise<Cliente | undefined>;
   deleteCliente(id: string, tenantId: string): Promise<boolean>;
@@ -53,6 +58,9 @@ export interface IStorage {
   createPedido(pedido: InsertPedido): Promise<Pedido>;
   updatePedido(id: string, tenantId: string, pedido: Partial<InsertPedido>): Promise<Pedido | undefined>;
   deletePedido(id: string, tenantId: string): Promise<boolean>;
+
+  getLogsN8n(tenantId: string): Promise<LogN8n[]>;
+  createLogN8n(log: InsertLogN8n): Promise<LogN8n>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -92,6 +100,11 @@ export class DatabaseStorage implements IStorage {
     return tenant || undefined;
   }
 
+  async getTenantByApiKey(apiKey: string): Promise<Tenant | undefined> {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.apiKeyN8n, apiKey));
+    return tenant || undefined;
+  }
+
   async createTenant(insertTenant: InsertTenant): Promise<Tenant> {
     const [tenant] = await db
       .insert(tenants)
@@ -118,6 +131,14 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(clientes)
       .where(and(eq(clientes.id, id), eq(clientes.tenantId, tenantId)));
+    return cliente || undefined;
+  }
+
+  async getClienteByTelefone(telefone: string, tenantId: string): Promise<Cliente | undefined> {
+    const [cliente] = await db
+      .select()
+      .from(clientes)
+      .where(and(eq(clientes.telefone, telefone), eq(clientes.tenantId, tenantId)));
     return cliente || undefined;
   }
 
@@ -236,6 +257,23 @@ export class DatabaseStorage implements IStorage {
       .delete(pedidos)
       .where(and(eq(pedidos.id, id), eq(pedidos.tenantId, tenantId)));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async getLogsN8n(tenantId: string): Promise<LogN8n[]> {
+    return await db
+      .select()
+      .from(logsN8n)
+      .where(eq(logsN8n.tenantId, tenantId))
+      .orderBy(desc(logsN8n.createdAt))
+      .limit(100);
+  }
+
+  async createLogN8n(insertLog: InsertLogN8n): Promise<LogN8n> {
+    const [log] = await db
+      .insert(logsN8n)
+      .values(insertLog)
+      .returning();
+    return log;
   }
 }
 

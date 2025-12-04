@@ -2,6 +2,8 @@ import type { Express } from "express";
 import { type Server } from "http";
 import { storage } from "./storage";
 import { hashPassword, comparePasswords, requireAuth, requireTenant, regenerateSession } from "./auth";
+import { validateN8nWebhook, generateApiKey } from "./webhook-security";
+import { sendToN8n, notifyN8nNewOrder } from "./n8n-requester";
 import {
   insertTenantSchema,
   insertClienteSchema,
@@ -9,6 +11,8 @@ import {
   insertPedidoSchema,
   loginSchema,
   registerSchema,
+  webhookPedidoSchema,
+  webhookIndicadorSchema,
 } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 
@@ -434,6 +438,180 @@ export async function registerRoutes(
       res.json(estoqueItem);
     } catch (error) {
       res.status(500).json({ error: "Failed to update estoque" });
+    }
+  });
+
+  // ============================================
+  // N8N WEBHOOK ROUTES
+  // ============================================
+
+  app.post("/api/webhook/n8n/pedido", validateN8nWebhook, async (req, res) => {
+    try {
+      const tenantId = req.webhookTenant!.id;
+      
+      const validation = webhookPedidoSchema.safeParse(req.body);
+      if (!validation.success) {
+        await storage.createLogN8n({
+          tenantId,
+          tipo: "pedido_recebido",
+          endpoint: "/api/webhook/n8n/pedido",
+          payload: req.body,
+          resposta: null,
+          status: "erro",
+          erro: fromZodError(validation.error).toString(),
+        });
+        return res.status(400).json({ 
+          error: fromZodError(validation.error).toString() 
+        });
+      }
+
+      const { cliente: clienteData, itens, total, observacoes, enderecoEntrega } = validation.data;
+
+      let cliente = await storage.getClienteByTelefone(clienteData.telefone || "", tenantId);
+      
+      if (!cliente && clienteData.telefone) {
+        cliente = await storage.createCliente({
+          tenantId,
+          nome: clienteData.nome,
+          telefone: clienteData.telefone,
+          email: clienteData.email || null,
+          endereco: clienteData.endereco || null,
+        });
+      }
+
+      const pedido = await storage.createPedido({
+        tenantId,
+        clienteId: cliente?.id || null,
+        status: "pendente",
+        total: total.toString(),
+        itens: itens.map(item => ({
+          produtoId: item.produtoId || null,
+          nome: item.nome,
+          quantidade: item.quantidade,
+          precoUnitario: item.precoUnitario,
+          subtotal: item.quantidade * item.precoUnitario,
+        })),
+        observacoes: observacoes || null,
+        enderecoEntrega: enderecoEntrega || clienteData.endereco || null,
+        origem: "n8n",
+      });
+
+      await storage.createLogN8n({
+        tenantId,
+        tipo: "pedido_recebido",
+        endpoint: "/api/webhook/n8n/pedido",
+        payload: req.body,
+        resposta: { pedidoId: pedido.id },
+        status: "sucesso",
+        erro: null,
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Pedido criado com sucesso",
+        pedidoId: pedido.id,
+        clienteId: cliente?.id || null,
+      });
+    } catch (error) {
+      console.error("Webhook pedido error:", error);
+      res.status(500).json({ error: "Erro ao processar pedido" });
+    }
+  });
+
+  app.post("/api/webhook/n8n/indicador", validateN8nWebhook, async (req, res) => {
+    try {
+      const tenantId = req.webhookTenant!.id;
+      
+      const validation = webhookIndicadorSchema.safeParse(req.body);
+      if (!validation.success) {
+        await storage.createLogN8n({
+          tenantId,
+          tipo: "indicador_recebido",
+          endpoint: "/api/webhook/n8n/indicador",
+          payload: req.body,
+          resposta: null,
+          status: "erro",
+          erro: fromZodError(validation.error).toString(),
+        });
+        return res.status(400).json({ 
+          error: fromZodError(validation.error).toString() 
+        });
+      }
+
+      const { tipo, dados, mensagem } = validation.data;
+
+      const log = await storage.createLogN8n({
+        tenantId,
+        tipo: `indicador_${tipo}`,
+        endpoint: "/api/webhook/n8n/indicador",
+        payload: { tipo, dados, mensagem },
+        resposta: { processed: true },
+        status: "sucesso",
+        erro: null,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: mensagem || "Indicador registrado com sucesso",
+        logId: log.id,
+      });
+    } catch (error) {
+      console.error("Webhook indicador error:", error);
+      res.status(500).json({ error: "Erro ao processar indicador" });
+    }
+  });
+
+  app.get("/api/logs/n8n", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const logs = await storage.getLogsN8n(tenantId);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch logs" });
+    }
+  });
+
+  app.post("/api/n8n/generate-api-key", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const apiKey = generateApiKey();
+      
+      const tenant = await storage.updateTenant(tenantId, { apiKeyN8n: apiKey });
+      if (!tenant) {
+        return res.status(404).json({ error: "Tenant não encontrado" });
+      }
+
+      res.json({ 
+        success: true,
+        apiKey,
+        message: "Nova API Key gerada. Guarde-a em local seguro." 
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao gerar API Key" });
+    }
+  });
+
+  app.post("/api/n8n/send", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { endpoint, payload } = req.body;
+
+      if (!endpoint || !payload) {
+        return res.status(400).json({ error: "endpoint e payload são obrigatórios" });
+      }
+
+      const result = await sendToN8n({ tenantId, endpoint, payload });
+      
+      if (!result.success) {
+        return res.status(400).json({ 
+          error: result.error,
+          statusCode: result.statusCode,
+        });
+      }
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao enviar para N8N" });
     }
   });
 
