@@ -3,6 +3,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { ShoppingBag, Users, Package, TrendingUp, Clock, CheckCircle2 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+const CHART_COLORS = ["#e67e22", "#d35400", "#f39c12", "#e74c3c", "#c0392b", "#9b59b6"];
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -38,7 +55,27 @@ export default function Dashboard() {
     enabled: hasTenant,
   });
 
-  const pendingOrders = pedidos.filter((p: any) => p.status === "pendente").length;
+  const { data: dailySales = [] } = useQuery({
+    queryKey: ["analytics", "daily-sales"],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics/daily-sales?days=7`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: hasTenant,
+  });
+
+  const { data: topItems = [] } = useQuery({
+    queryKey: ["analytics", "top-items"],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics/top-items?limit=5`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: hasTenant,
+  });
+
+  const pendingOrders = pedidos.filter((p: any) => p.status === "pendente" || p.status === "recebido").length;
   const completedOrders = pedidos.filter((p: any) => p.status === "entregue").length;
   const totalRevenue = pedidos.reduce((acc: number, p: any) => acc + parseFloat(p.total || 0), 0);
 
@@ -77,11 +114,25 @@ export default function Dashboard() {
     },
   ];
 
+  const chartData = [...dailySales]
+    .reverse()
+    .map((item: any) => ({
+      date: format(parseISO(item.date), "dd/MM", { locale: ptBR }),
+      vendas: item.total,
+      pedidos: item.count,
+    }));
+
+  const pieData = topItems.map((item: any, index: number) => ({
+    name: item.name.length > 15 ? item.name.substring(0, 15) + "..." : item.name,
+    value: item.quantity,
+    color: CHART_COLORS[index % CHART_COLORS.length],
+  }));
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-serif font-bold">
+          <h1 className="text-3xl font-serif font-bold" data-testid="text-welcome">
             Bem-vindo, {user?.nome?.split(" ")[0]}!
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -129,6 +180,107 @@ export default function Dashboard() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                    Vendas Diárias
+                  </CardTitle>
+                  <CardDescription>
+                    Faturamento dos últimos 7 dias
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {chartData.length === 0 ? (
+                    <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                      <p>Nenhum dado de vendas disponível</p>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis 
+                          dataKey="date" 
+                          tick={{ fontSize: 12 }}
+                          tickLine={false}
+                        />
+                        <YAxis 
+                          tick={{ fontSize: 12 }}
+                          tickLine={false}
+                          tickFormatter={(value) => `R$${value}`}
+                        />
+                        <Tooltip 
+                          formatter={(value: number) => [`R$ ${value.toFixed(2)}`, "Vendas"]}
+                          labelFormatter={(label) => `Data: ${label}`}
+                          contentStyle={{ 
+                            backgroundColor: '#fff', 
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px'
+                          }}
+                        />
+                        <Bar 
+                          dataKey="vendas" 
+                          fill="#e67e22" 
+                          radius={[4, 4, 0, 0]}
+                          name="Vendas"
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5 text-primary" />
+                    Itens Mais Vendidos
+                  </CardTitle>
+                  <CardDescription>
+                    Top 5 produtos por quantidade vendida
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {pieData.length === 0 ? (
+                    <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                      <p>Nenhum dado de vendas disponível</p>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          label={({ name, percent }) => 
+                            `${name} (${(percent * 100).toFixed(0)}%)`
+                          }
+                          labelLine={false}
+                        >
+                          {pieData.map((entry: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          formatter={(value: number) => [`${value} unidades`, "Quantidade"]}
+                          contentStyle={{ 
+                            backgroundColor: '#fff', 
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px'
+                          }}
+                        />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
                     <Clock className="h-5 w-5 text-orange-500" />
                     Pedidos Pendentes
                   </CardTitle>
@@ -144,12 +296,13 @@ export default function Dashboard() {
                   ) : (
                     <div className="space-y-2">
                       {pedidos
-                        .filter((p: any) => p.status === "pendente")
+                        .filter((p: any) => p.status === "pendente" || p.status === "recebido")
                         .slice(0, 5)
                         .map((pedido: any) => (
                           <div
                             key={pedido.id}
                             className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                            data-testid={`pending-order-${pedido.id}`}
                           >
                             <div>
                               <p className="font-medium text-sm">
@@ -160,7 +313,7 @@ export default function Dashboard() {
                               </p>
                             </div>
                             <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">
-                              Pendente
+                              {pedido.status === "recebido" ? "Recebido" : "Pendente"}
                             </span>
                           </div>
                         ))}
@@ -173,7 +326,7 @@ export default function Dashboard() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    Pedidos Entregues Hoje
+                    Pedidos Entregues
                   </CardTitle>
                   <CardDescription>
                     {completedOrders} pedidos finalizados
@@ -182,7 +335,7 @@ export default function Dashboard() {
                 <CardContent>
                   {completedOrders === 0 ? (
                     <p className="text-muted-foreground text-sm">
-                      Nenhum pedido entregue ainda hoje.
+                      Nenhum pedido entregue ainda.
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -193,6 +346,7 @@ export default function Dashboard() {
                           <div
                             key={pedido.id}
                             className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                            data-testid={`completed-order-${pedido.id}`}
                           >
                             <div>
                               <p className="font-medium text-sm">
