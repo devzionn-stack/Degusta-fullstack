@@ -1,12 +1,14 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
+import { type Server } from "http";
 import { storage } from "./storage";
+import { hashPassword, comparePasswords, requireAuth, requireTenant } from "./auth";
 import {
   insertTenantSchema,
   insertClienteSchema,
   insertProdutoSchema,
-  insertEstoqueSchema,
   insertPedidoSchema,
+  loginSchema,
+  registerSchema,
 } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 
@@ -15,6 +17,118 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
+  // ============================================
+  // AUTH ROUTES
+  // ============================================
+  
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const validation = registerSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: fromZodError(validation.error).toString() 
+        });
+      }
+
+      const { email, password, nome, tenantId } = validation.data;
+      
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ error: "Email já cadastrado" });
+      }
+
+      const hashedPassword = await hashPassword(password);
+      const user = await storage.createUser({
+        email,
+        password: hashedPassword,
+        nome,
+        tenantId: tenantId || null,
+        role: "user",
+      });
+
+      req.session.userId = user.id;
+      
+      res.status(201).json({
+        id: user.id,
+        email: user.email,
+        nome: user.nome,
+        tenantId: user.tenantId,
+        role: user.role,
+      });
+    } catch (error) {
+      console.error("Register error:", error);
+      res.status(500).json({ error: "Erro ao criar conta" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const validation = loginSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: fromZodError(validation.error).toString() 
+        });
+      }
+
+      const { email, password } = validation.data;
+      
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ error: "Email ou senha inválidos" });
+      }
+
+      const isValid = await comparePasswords(password, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: "Email ou senha inválidos" });
+      }
+
+      req.session.userId = user.id;
+      
+      res.json({
+        id: user.id,
+        email: user.email,
+        nome: user.nome,
+        tenantId: user.tenantId,
+        role: user.role,
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Erro ao fazer login" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Erro ao fazer logout" });
+      }
+      res.json({ message: "Logout realizado com sucesso" });
+    });
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    if (!req.session?.userId) {
+      return res.status(401).json({ error: "Não autenticado" });
+    }
+
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(401).json({ error: "Usuário não encontrado" });
+      }
+
+      res.json({
+        id: user.id,
+        email: user.email,
+        nome: user.nome,
+        tenantId: user.tenantId,
+        role: user.role,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar usuário" });
+    }
+  });
+
   // ============================================
   // TENANTS ROUTES
   // ============================================
@@ -40,7 +154,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/tenants", async (req, res) => {
+  app.post("/api/tenants", requireAuth, async (req, res) => {
     try {
       const validation = insertTenantSchema.safeParse(req.body);
       if (!validation.success) {
@@ -55,7 +169,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/tenants/:id", async (req, res) => {
+  app.patch("/api/tenants/:id", requireAuth, async (req, res) => {
     try {
       const tenant = await storage.updateTenant(req.params.id, req.body);
       if (!tenant) {
@@ -71,9 +185,9 @@ export async function registerRoutes(
   // CLIENTES ROUTES (Multi-tenant)
   // ============================================
   
-  app.get("/api/clientes", async (req, res) => {
+  app.get("/api/clientes", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -84,9 +198,9 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/clientes/:id", async (req, res) => {
+  app.get("/api/clientes/:id", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -100,9 +214,10 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/clientes", async (req, res) => {
+  app.post("/api/clientes", requireAuth, async (req, res) => {
     try {
-      const validation = insertClienteSchema.safeParse(req.body);
+      const tenantId = req.user?.tenantId || req.body.tenantId;
+      const validation = insertClienteSchema.safeParse({ ...req.body, tenantId });
       if (!validation.success) {
         return res.status(400).json({ 
           error: fromZodError(validation.error).toString() 
@@ -115,9 +230,9 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/clientes/:id", async (req, res) => {
+  app.patch("/api/clientes/:id", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -131,9 +246,9 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/clientes/:id", async (req, res) => {
+  app.delete("/api/clientes/:id", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -153,7 +268,7 @@ export async function registerRoutes(
   
   app.get("/api/produtos", async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -166,7 +281,7 @@ export async function registerRoutes(
 
   app.get("/api/produtos/:id", async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -180,9 +295,10 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/produtos", async (req, res) => {
+  app.post("/api/produtos", requireAuth, async (req, res) => {
     try {
-      const validation = insertProdutoSchema.safeParse(req.body);
+      const tenantId = req.user?.tenantId || req.body.tenantId;
+      const validation = insertProdutoSchema.safeParse({ ...req.body, tenantId });
       if (!validation.success) {
         return res.status(400).json({ 
           error: fromZodError(validation.error).toString() 
@@ -195,9 +311,9 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/produtos/:id", async (req, res) => {
+  app.patch("/api/produtos/:id", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -211,9 +327,9 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/produtos/:id", async (req, res) => {
+  app.delete("/api/produtos/:id", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -231,9 +347,9 @@ export async function registerRoutes(
   // PEDIDOS ROUTES (Multi-tenant)
   // ============================================
   
-  app.get("/api/pedidos", async (req, res) => {
+  app.get("/api/pedidos", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -244,9 +360,9 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/pedidos/:id", async (req, res) => {
+  app.get("/api/pedidos/:id", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -260,9 +376,10 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/pedidos", async (req, res) => {
+  app.post("/api/pedidos", requireAuth, async (req, res) => {
     try {
-      const validation = insertPedidoSchema.safeParse(req.body);
+      const tenantId = req.user?.tenantId || req.body.tenantId;
+      const validation = insertPedidoSchema.safeParse({ ...req.body, tenantId });
       if (!validation.success) {
         return res.status(400).json({ 
           error: fromZodError(validation.error).toString() 
@@ -275,9 +392,9 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/pedidos/:id", async (req, res) => {
+  app.patch("/api/pedidos/:id", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -291,9 +408,9 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/pedidos/:id", async (req, res) => {
+  app.delete("/api/pedidos/:id", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -311,9 +428,9 @@ export async function registerRoutes(
   // ESTOQUE ROUTES (Multi-tenant)
   // ============================================
   
-  app.get("/api/estoque", async (req, res) => {
+  app.get("/api/estoque", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -324,9 +441,9 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/estoque/produto/:produtoId", async (req, res) => {
+  app.get("/api/estoque/produto/:produtoId", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
@@ -340,9 +457,9 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/estoque/:id", async (req, res) => {
+  app.patch("/api/estoque/:id", requireAuth, async (req, res) => {
     try {
-      const tenantId = req.query.tenantId as string;
+      const tenantId = req.user?.tenantId || req.query.tenantId as string;
       if (!tenantId) {
         return res.status(400).json({ error: "tenantId is required" });
       }
