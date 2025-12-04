@@ -154,10 +154,10 @@ export default function Cozinha() {
   }, [queryClient, toast]);
 
   useEffect(() => {
-    if (!hasTenant || !user?.tenantId) return;
+    if (!hasTenant) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/pedidos?tenantId=${user.tenantId}`;
+    const wsUrl = `${protocol}//${window.location.host}/ws/pedidos`;
     
     let ws: WebSocket | null = null;
     let reconnectTimeout: NodeJS.Timeout | null = null;
@@ -190,7 +190,7 @@ export default function Cozinha() {
       if (ws) ws.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
-  }, [hasTenant, user?.tenantId, handleWebSocketMessage]);
+  }, [hasTenant, handleWebSocketMessage]);
 
   const pedidosByStatus = {
     recebido: pedidos.filter(p => p.status === "recebido"),

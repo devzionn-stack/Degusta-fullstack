@@ -1,44 +1,112 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { Server } from "http";
 import type { Pedido } from "../shared/schema";
+import { storage } from "./storage";
+import { parse as parseCookie } from "cookie";
+import { unsign } from "cookie-signature";
+import { pool } from "./db";
+import { getSessionSecret } from "./session-config";
 
 interface TenantConnection {
   ws: WebSocket;
   tenantId: string;
+  userId: string;
 }
 
 const connections: TenantConnection[] = [];
 
+function verifySignedCookie(signedValue: string): string | false {
+  const secret = getSessionSecret();
+  
+  if (!signedValue.startsWith("s:")) {
+    return false;
+  }
+  
+  const signedPart = signedValue.slice(2);
+  const result = unsign(signedPart, secret);
+  
+  return result;
+}
+
+async function getSessionUser(sessionId: string): Promise<{ userId: string; tenantId: string | null } | null> {
+  try {
+    const result = await pool.query(
+      'SELECT sess FROM sessions WHERE sid = $1 AND expire > NOW()',
+      [sessionId]
+    );
+    
+    if (result.rows.length === 0) return null;
+    
+    const session = result.rows[0].sess;
+    if (!session?.userId) return null;
+    
+    const user = await storage.getUser(session.userId);
+    if (!user) return null;
+    
+    return { userId: user.id, tenantId: user.tenantId };
+  } catch (error) {
+    console.error("WebSocket session lookup error:", error);
+    return null;
+  }
+}
+
 export function setupWebSocket(server: Server) {
   const wss = new WebSocketServer({ server, path: "/ws/pedidos" });
 
-  wss.on("connection", (ws, req) => {
-    const url = new URL(req.url || "", `http://${req.headers.host}`);
-    const tenantId = url.searchParams.get("tenantId");
-
-    if (!tenantId) {
-      ws.close(1008, "Missing tenantId");
-      return;
-    }
-
-    const connection: TenantConnection = { ws, tenantId };
-    connections.push(connection);
-
-    console.log(`WebSocket connected for tenant: ${tenantId}`);
-
-    ws.on("close", () => {
-      const index = connections.indexOf(connection);
-      if (index > -1) {
-        connections.splice(index, 1);
+  wss.on("connection", async (ws, req) => {
+    try {
+      const cookies = parseCookie(req.headers.cookie || "");
+      const signedSessionId = cookies["connect.sid"];
+      
+      if (!signedSessionId) {
+        ws.close(1008, "Authentication required");
+        return;
       }
-      console.log(`WebSocket disconnected for tenant: ${tenantId}`);
-    });
 
-    ws.on("error", (error) => {
-      console.error("WebSocket error:", error);
-    });
+      const sessionId = verifySignedCookie(signedSessionId);
+      
+      if (!sessionId) {
+        console.warn("WebSocket: Invalid session signature");
+        ws.close(1008, "Invalid session");
+        return;
+      }
 
-    ws.send(JSON.stringify({ type: "connected", tenantId }));
+      const sessionUser = await getSessionUser(sessionId);
+      
+      if (!sessionUser || !sessionUser.tenantId) {
+        ws.close(1008, "Authentication required or no tenant");
+        return;
+      }
+
+      const connection: TenantConnection = { 
+        ws, 
+        tenantId: sessionUser.tenantId,
+        userId: sessionUser.userId
+      };
+      connections.push(connection);
+
+      console.log(`WebSocket connected for tenant: ${sessionUser.tenantId}, user: ${sessionUser.userId}`);
+
+      ws.on("close", () => {
+        const index = connections.indexOf(connection);
+        if (index > -1) {
+          connections.splice(index, 1);
+        }
+        console.log(`WebSocket disconnected for tenant: ${sessionUser.tenantId}`);
+      });
+
+      ws.on("error", (error) => {
+        console.error("WebSocket error:", error);
+      });
+
+      ws.send(JSON.stringify({ 
+        type: "connected", 
+        tenantId: sessionUser.tenantId 
+      }));
+    } catch (error) {
+      console.error("WebSocket connection error:", error);
+      ws.close(1011, "Internal error");
+    }
   });
 
   return wss;

@@ -7,6 +7,7 @@ import { loadUser } from "./auth";
 import { pool } from "./db";
 import connectPgSimple from "connect-pg-simple";
 import { setupWebSocket } from "./websocket";
+import { getSessionSecret } from "./session-config";
 
 const app = express();
 const httpServer = createServer(app);
@@ -19,10 +20,7 @@ declare module "http" {
 
 const PgSession = connectPgSimple(session);
 
-const sessionSecret = process.env.SESSION_SECRET;
-if (!sessionSecret) {
-  console.warn("WARNING: SESSION_SECRET is not set. Using a random secret for this session only.");
-}
+const sessionSecret = getSessionSecret();
 
 app.use(
   session({
@@ -31,7 +29,7 @@ app.use(
       tableName: "sessions",
       createTableIfMissing: true,
     }),
-    secret: sessionSecret || require("crypto").randomBytes(32).toString("hex"),
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
