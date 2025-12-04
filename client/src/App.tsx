@@ -10,6 +10,8 @@ import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
 import Cozinha from "@/pages/Cozinha";
 import Pedidos from "@/pages/Pedidos";
+import Financeiro from "@/pages/Financeiro";
+import Configuracoes from "@/pages/Configuracoes";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -20,6 +22,8 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/dashboard/pedidos" component={Pedidos} />
+      <Route path="/dashboard/financeiro" component={Financeiro} />
+      <Route path="/dashboard/configuracoes" component={Configuracoes} />
       <Route path="/cozinha" component={Cozinha} />
       <Route component={NotFound} />
     </Switch>

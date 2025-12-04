@@ -144,11 +144,27 @@ export async function registerRoutes(
   });
 
   // ============================================
-  // TENANTS ROUTES (Admin only in production)
+  // TENANTS ROUTES (Protected - Tenant Scoped)
   // ============================================
   
-  app.get("/api/tenants", async (req, res) => {
+  app.get("/api/tenants/me", requireAuth, requireTenant, async (req, res) => {
     try {
+      const tenantId = req.user!.tenantId!;
+      const tenant = await storage.getTenant(tenantId);
+      if (!tenant) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+      res.json(tenant);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch tenant" });
+    }
+  });
+
+  app.get("/api/tenants", requireAuth, async (req, res) => {
+    try {
+      if (req.user?.role !== 'admin') {
+        return res.status(403).json({ error: "Admin access required" });
+      }
       const tenants = await storage.getTenants();
       res.json(tenants);
     } catch (error) {
@@ -156,8 +172,11 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/tenants/:id", async (req, res) => {
+  app.get("/api/tenants/:id", requireAuth, async (req, res) => {
     try {
+      if (req.user?.tenantId !== req.params.id && req.user?.role !== 'admin') {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const tenant = await storage.getTenant(req.params.id);
       if (!tenant) {
         return res.status(404).json({ error: "Tenant not found" });
