@@ -40,6 +40,7 @@ export const produtos = pgTable("produtos", {
   preco: decimal("preco", { precision: 10, scale: 2 }).notNull(),
   categoria: text("categoria"),
   imagem: text("imagem"),
+  tempoPreparoEstimado: integer("tempo_preparo_estimado").default(15),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -83,6 +84,10 @@ export const pedidos = pgTable("pedidos", {
   trackingStatus: text("tracking_status"),
   trackingData: jsonb("tracking_data"),
   trackingStartedAt: timestamp("tracking_started_at"),
+  tempoPreparoEstimado: integer("tempo_preparo_estimado"),
+  tempoEntregaEstimado: integer("tempo_entrega_estimado"),
+  inicioPreparoAt: timestamp("inicio_preparo_at"),
+  prontoEntregaAt: timestamp("pronto_entrega_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -146,6 +151,19 @@ export const alertasFrota = pgTable("alertas_frota", {
   mensagem: text("mensagem").notNull(),
   meta: jsonb("meta").$type<Record<string, any>>(),
   lida: boolean("lida").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const historicoPreparo = pgTable("historico_preparo", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  pedidoId: varchar("pedido_id").notNull().references(() => pedidos.id, { onDelete: "cascade" }),
+  produtoId: varchar("produto_id").references(() => produtos.id, { onDelete: "set null" }),
+  produtoNome: text("produto_nome").notNull(),
+  tempoEstimado: integer("tempo_estimado").notNull(),
+  tempoReal: integer("tempo_real"),
+  inicioAt: timestamp("inicio_at").notNull(),
+  fimAt: timestamp("fim_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -223,6 +241,11 @@ export const insertAlertaFrotaSchema = createInsertSchema(alertasFrota).omit({
   createdAt: true,
 });
 
+export const insertHistoricoPreparoSchema = createInsertSchema(historicoPreparo).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const tipoTransacaoEnum = z.enum(["receita", "despesa"]);
 export const statusTransacaoEnum = z.enum(["pendente", "confirmado", "cancelado"]);
 export const severidadeAlertaEnum = z.enum(["info", "warn", "critical"]);
@@ -295,3 +318,6 @@ export type InsertPrevisaoEstoque = z.infer<typeof insertPrevisaoEstoqueSchema>;
 
 export type AlertaFrota = typeof alertasFrota.$inferSelect;
 export type InsertAlertaFrota = z.infer<typeof insertAlertaFrotaSchema>;
+
+export type HistoricoPreparo = typeof historicoPreparo.$inferSelect;
+export type InsertHistoricoPreparo = z.infer<typeof insertHistoricoPreparoSchema>;
