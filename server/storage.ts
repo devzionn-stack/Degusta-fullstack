@@ -15,6 +15,8 @@ import {
   type InsertPedido,
   type LogN8n,
   type InsertLogN8n,
+  type Transacao,
+  type InsertTransacao,
   users,
   tenants,
   clientes,
@@ -23,6 +25,7 @@ import {
   motoboys,
   pedidos,
   logsN8n,
+  transacoes,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, inArray, sql } from "drizzle-orm";
