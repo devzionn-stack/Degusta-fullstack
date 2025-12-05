@@ -928,6 +928,58 @@ export async function registerRoutes(
   // ANALYTICS ROUTES
   // ============================================
 
+  app.get("/api/analytics/dashboard-stats", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      
+      const pedidos = await storage.getPedidos(tenantId);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const pedidosHoje = pedidos.filter(p => {
+        const pedidoDate = new Date(p.createdAt);
+        pedidoDate.setHours(0, 0, 0, 0);
+        return pedidoDate.getTime() === today.getTime();
+      });
+      
+      const vendasDiarias = pedidosHoje.reduce((acc, p) => acc + parseFloat(p.total || "0"), 0);
+      
+      const pedidosEntregues = pedidos.filter(p => p.status === "entregue");
+      const ticketMedio = pedidosEntregues.length > 0
+        ? pedidosEntregues.reduce((acc, p) => acc + parseFloat(p.total || "0"), 0) / pedidosEntregues.length
+        : 0;
+      
+      const pedidosAbertos = pedidos.filter(p => 
+        ["pendente", "recebido", "em_preparo", "pronto", "saiu_entrega"].includes(p.status)
+      ).length;
+      
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      const pedidosOntem = pedidos.filter(p => {
+        const pedidoDate = new Date(p.createdAt);
+        pedidoDate.setHours(0, 0, 0, 0);
+        return pedidoDate.getTime() === yesterday.getTime();
+      });
+      
+      const vendasOntem = pedidosOntem.reduce((acc, p) => acc + parseFloat(p.total || "0"), 0);
+      const variacaoVendas = vendasOntem > 0 
+        ? ((vendasDiarias - vendasOntem) / vendasOntem) * 100 
+        : (vendasDiarias > 0 ? 100 : 0);
+      
+      res.json({
+        vendasDiarias,
+        ticketMedio,
+        pedidosAbertos,
+        totalPedidosHoje: pedidosHoje.length,
+        variacaoVendas: Math.round(variacaoVendas * 10) / 10,
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+      res.status(500).json({ error: "Failed to fetch dashboard stats" });
+    }
+  });
+
   app.get("/api/analytics/daily-sales", requireAuth, requireTenant, async (req, res) => {
     try {
       const tenantId = req.user!.tenantId!;
