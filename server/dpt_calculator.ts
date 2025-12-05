@@ -85,7 +85,7 @@ export async function calcularDPT(
     .where(
       and(
         eq(pedidos.tenantId, tenantId),
-        sql`${pedidos.status} IN ('pendente', 'em_preparo', 'confirmado')`
+        sql`${pedidos.status} IN ('pendente', 'recebido', 'em_preparo', 'confirmado')`
       )
     );
 
@@ -125,7 +125,7 @@ export async function obterDPTRealtime(tenantId: string): Promise<DPTRealtimeInf
     .where(
       and(
         eq(pedidos.tenantId, tenantId),
-        sql`${pedidos.status} IN ('pendente', 'em_preparo', 'confirmado')`
+        sql`${pedidos.status} IN ('pendente', 'recebido', 'em_preparo', 'confirmado')`
       )
     )
     .orderBy(desc(pedidos.createdAt));

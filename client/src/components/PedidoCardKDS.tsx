@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { 
   ChefHat, 
   Clock, 
@@ -11,7 +12,9 @@ import {
   RefreshCw,
   Timer,
   Flame,
-  Package
+  Package,
+  Gauge,
+  TrendingUp
 } from "lucide-react";
 
 interface PedidoItem {
@@ -35,16 +38,38 @@ interface Pedido {
   origem: string | null;
   createdAt: string;
   updatedAt: string;
+  tempoPreparoEstimado?: number | null;
+  tempoEntregaEstimado?: number | null;
+  inicioPreparoAt?: string | null;
+  prontoEntregaAt?: string | null;
+}
+
+interface DPTRealtimeInfo {
+  tempoRestante: number;
+  progresso: number;
+  atrasado: boolean;
 }
 
 interface PedidoCardKDSProps {
   pedido: Pedido;
   onStatusChange: (pedidoId: string, newStatus: string) => void;
+  onStartPreparo?: (pedidoId: string) => void;
+  onFinishPreparo?: (pedidoId: string) => void;
   isUpdating?: boolean;
   compact?: boolean;
+  dptInfo?: DPTRealtimeInfo;
 }
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<string, {
+  label: string;
+  color: string;
+  icon: typeof Clock;
+  nextStatus?: string;
+  nextLabel?: string;
+  nextIcon?: typeof Clock;
+  useDPTStart?: boolean;
+  useDPTFinish?: boolean;
+}> = {
   pendente: {
     label: "Pendente",
     color: "bg-gray-100 text-gray-800 border-gray-200",
@@ -60,6 +85,7 @@ const STATUS_CONFIG = {
     nextStatus: "em_preparo",
     nextLabel: "Iniciar Preparo",
     nextIcon: ChefHat,
+    useDPTStart: true,
   },
   em_preparo: {
     label: "Em Preparo",
@@ -68,6 +94,7 @@ const STATUS_CONFIG = {
     nextStatus: "pronto",
     nextLabel: "Marcar Pronto",
     nextIcon: CheckCircle2,
+    useDPTFinish: true,
   },
   pronto: {
     label: "Pronto",
@@ -87,7 +114,7 @@ const STATUS_CONFIG = {
   },
 };
 
-function calculateDPT(itens: PedidoItem[]): number {
+function calculateLocalDPT(itens: PedidoItem[]): number {
   const baseTime = 5;
   const perItemTime = 2;
   const complexItemBonus = 3;
@@ -107,13 +134,15 @@ function calculateDPT(itens: PedidoItem[]): number {
   return baseTime + (totalItems * perItemTime) + (complexItems * complexItemBonus);
 }
 
-function getWaitTimeInfo(createdAt: string, status: string) {
+function getWaitTimeInfo(createdAt: string, status: string, inicioPreparoAt?: string | null, tempoPreparoEstimado?: number | null) {
   const now = new Date();
   const created = new Date(createdAt);
   const diffMinutes = Math.floor((now.getTime() - created.getTime()) / 1000 / 60);
   
   let urgencyLevel: "green" | "yellow" | "red" = "green";
   let urgencyLabel = "No prazo";
+  
+  const estimado = tempoPreparoEstimado || 15;
   
   if (status === "recebido") {
     if (diffMinutes >= 15) {
@@ -124,12 +153,17 @@ function getWaitTimeInfo(createdAt: string, status: string) {
       urgencyLabel = "Atenção";
     }
   } else if (status === "em_preparo") {
-    if (diffMinutes >= 25) {
+    const inicio = inicioPreparoAt ? new Date(inicioPreparoAt) : created;
+    const tempoEmPreparo = Math.floor((now.getTime() - inicio.getTime()) / 1000 / 60);
+    
+    if (tempoEmPreparo > estimado) {
       urgencyLevel = "red";
-      urgencyLabel = "Atrasado!";
-    } else if (diffMinutes >= 15) {
+      urgencyLabel = `+${tempoEmPreparo - estimado}min atrasado`;
+    } else if (tempoEmPreparo >= estimado * 0.8) {
       urgencyLevel = "yellow";
-      urgencyLabel = "Atenção";
+      urgencyLabel = `${estimado - tempoEmPreparo}min restante`;
+    } else {
+      urgencyLabel = `${estimado - tempoEmPreparo}min restante`;
     }
   } else if (status === "pronto") {
     if (diffMinutes >= 35) {
@@ -150,6 +184,22 @@ function getWaitTimeInfo(createdAt: string, status: string) {
   }
   
   return { diffMinutes, urgencyLevel, urgencyLabel };
+}
+
+function calculateProgress(pedido: Pedido): { progress: number; isLate: boolean; tempoDecorrido: number } {
+  if (pedido.status !== "em_preparo") {
+    return { progress: 0, isLate: false, tempoDecorrido: 0 };
+  }
+  
+  const now = new Date();
+  const inicio = pedido.inicioPreparoAt ? new Date(pedido.inicioPreparoAt) : new Date(pedido.createdAt);
+  const tempoDecorrido = Math.floor((now.getTime() - inicio.getTime()) / 1000 / 60);
+  const tempoEstimado = pedido.tempoPreparoEstimado || 15;
+  
+  const progress = Math.min(100, Math.round((tempoDecorrido / tempoEstimado) * 100));
+  const isLate = tempoDecorrido > tempoEstimado;
+  
+  return { progress, isLate, tempoDecorrido };
 }
 
 const URGENCY_COLORS = {
@@ -177,19 +227,29 @@ const URGENCY_COLORS = {
 export default function PedidoCardKDS({ 
   pedido, 
   onStatusChange, 
+  onStartPreparo,
+  onFinishPreparo,
   isUpdating = false,
-  compact = false 
+  compact = false,
+  dptInfo 
 }: PedidoCardKDSProps) {
   const config = STATUS_CONFIG[pedido.status as keyof typeof STATUS_CONFIG];
   
   const { diffMinutes, urgencyLevel, urgencyLabel } = useMemo(
-    () => getWaitTimeInfo(pedido.createdAt, pedido.status),
-    [pedido.createdAt, pedido.status]
+    () => getWaitTimeInfo(pedido.createdAt, pedido.status, pedido.inicioPreparoAt, pedido.tempoPreparoEstimado),
+    [pedido.createdAt, pedido.status, pedido.inicioPreparoAt, pedido.tempoPreparoEstimado]
   );
   
-  const dpt = useMemo(
-    () => calculateDPT(pedido.itens),
+  const localDpt = useMemo(
+    () => calculateLocalDPT(pedido.itens),
     [pedido.itens]
+  );
+  
+  const dpt = pedido.tempoPreparoEstimado || localDpt;
+  
+  const { progress, isLate, tempoDecorrido } = useMemo(
+    () => calculateProgress(pedido),
+    [pedido]
   );
   
   const urgencyColors = URGENCY_COLORS[urgencyLevel];
@@ -205,6 +265,16 @@ export default function PedidoCardKDS({
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours}h ${mins}m`;
+  };
+
+  const handleActionClick = () => {
+    if (config.useDPTStart && onStartPreparo) {
+      onStartPreparo(pedido.id);
+    } else if (config.useDPTFinish && onFinishPreparo) {
+      onFinishPreparo(pedido.id);
+    } else if (config.nextStatus) {
+      onStatusChange(pedido.id, config.nextStatus);
+    }
   };
 
   return (
@@ -234,7 +304,7 @@ export default function PedidoCardKDS({
           </Badge>
         </div>
         
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-between mt-2 gap-2">
           <div className={`
             flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium
             ${urgencyColors.bg} ${urgencyColors.border} ${urgencyColors.text} border
@@ -249,10 +319,32 @@ export default function PedidoCardKDS({
           </div>
           
           <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">
-            <Clock className="w-3 h-3" />
-            <span>DPT: ~{dpt}min</span>
+            <Gauge className="w-3 h-3" />
+            <span>DPT: {dpt}min</span>
           </div>
         </div>
+
+        {pedido.status === "em_preparo" && (
+          <div className="mt-3 space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <TrendingUp className="w-3 h-3" />
+                Progresso do preparo
+              </span>
+              <span className={`font-medium ${isLate ? 'text-red-600' : 'text-blue-600'}`}>
+                {dptInfo?.progresso ?? progress}%
+              </span>
+            </div>
+            <Progress 
+              value={dptInfo?.progresso ?? progress} 
+              className={`h-2 ${isLate ? '[&>div]:bg-red-500' : ''}`}
+            />
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>{tempoDecorrido} min decorridos</span>
+              <span>{Math.max(0, dpt - tempoDecorrido)} min restantes</span>
+            </div>
+          </div>
+        )}
       </CardHeader>
       
       <CardContent className={compact ? "p-3 pt-0" : "p-4 pt-0"}>
@@ -293,6 +385,13 @@ export default function PedidoCardKDS({
             </div>
           )}
 
+          {pedido.tempoEntregaEstimado && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-blue-50 px-2 py-1.5 rounded-md">
+              <Clock className="w-3.5 h-3.5 text-blue-500" />
+              <span>Tempo total estimado: <strong className="text-blue-700">{pedido.tempoEntregaEstimado} min</strong> (preparo + entrega)</span>
+            </div>
+          )}
+
           <div className="flex items-center justify-between pt-2 border-t gap-2">
             <span className="font-bold text-lg text-primary">
               R$ {parseFloat(pedido.total).toFixed(2)}
@@ -300,10 +399,10 @@ export default function PedidoCardKDS({
             
             {config.nextStatus && (
               <Button
-                onClick={() => onStatusChange(pedido.id, config.nextStatus!)}
+                onClick={handleActionClick}
                 disabled={isUpdating}
                 size={compact ? "sm" : "default"}
-                className="shrink-0"
+                className={`shrink-0 ${config.useDPTStart ? 'bg-orange-500 hover:bg-orange-600' : ''} ${config.useDPTFinish ? 'bg-green-500 hover:bg-green-600' : ''}`}
                 data-testid={`kds-action-${pedido.id}`}
               >
                 {isUpdating ? (
@@ -321,4 +420,4 @@ export default function PedidoCardKDS({
   );
 }
 
-export { calculateDPT, getWaitTimeInfo, STATUS_CONFIG };
+export { calculateLocalDPT as calculateDPT, getWaitTimeInfo, STATUS_CONFIG };

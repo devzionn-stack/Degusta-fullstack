@@ -15,7 +15,8 @@ import {
   Maximize2,
   Minimize2,
   Volume2,
-  VolumeX
+  VolumeX,
+  Gauge
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import PedidoCardKDS from "@/components/PedidoCardKDS";
@@ -41,6 +42,20 @@ interface Pedido {
   origem: string | null;
   createdAt: string;
   updatedAt: string;
+  tempoPreparoEstimado?: number | null;
+  tempoEntregaEstimado?: number | null;
+  inicioPreparoAt?: string | null;
+  prontoEntregaAt?: string | null;
+}
+
+interface DPTRealtimeInfo {
+  pedidoId: string;
+  status: string;
+  tempoPreparoEstimado: number;
+  tempoRestante: number;
+  progresso: number;
+  atrasado: boolean;
+  prioridadeOrdenacao: number;
 }
 
 export default function Cozinha() {
@@ -79,6 +94,7 @@ export default function Cozinha() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["pedidos-cozinha"] });
       queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+      queryClient.invalidateQueries({ queryKey: ["dpt-realtime"] });
       toast({
         title: "Status atualizado",
         description: `Pedido #${variables.pedidoId.slice(0, 8)} movido para próximo estágio`,
@@ -95,6 +111,88 @@ export default function Cozinha() {
       setUpdatingPedidoId(null);
     },
   });
+
+  const { data: dptRealtimeData = [] } = useQuery<DPTRealtimeInfo[]>({
+    queryKey: ["dpt-realtime"],
+    queryFn: async () => {
+      const res = await fetch(`/api/dpt/realtime`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch DPT realtime");
+      return res.json();
+    },
+    enabled: hasTenant,
+    refetchInterval: 10000,
+  });
+
+  const startPreparo = useMutation({
+    mutationFn: async (pedidoId: string) => {
+      setUpdatingPedidoId(pedidoId);
+      const res = await fetch(`/api/dpt/iniciar-preparo/${pedidoId}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to start preparo");
+      return res.json();
+    },
+    onSuccess: (_, pedidoId) => {
+      queryClient.invalidateQueries({ queryKey: ["pedidos-cozinha"] });
+      queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+      queryClient.invalidateQueries({ queryKey: ["dpt-realtime"] });
+      toast({
+        title: "Preparo iniciado",
+        description: `Pedido #${pedidoId.slice(0, 8)} em preparo - DPT ativo`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Não foi possível iniciar o preparo",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setUpdatingPedidoId(null);
+    },
+  });
+
+  const finishPreparo = useMutation({
+    mutationFn: async (pedidoId: string) => {
+      setUpdatingPedidoId(pedidoId);
+      const res = await fetch(`/api/dpt/finalizar-preparo/${pedidoId}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to finish preparo");
+      return res.json();
+    },
+    onSuccess: (_, pedidoId) => {
+      queryClient.invalidateQueries({ queryKey: ["pedidos-cozinha"] });
+      queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+      queryClient.invalidateQueries({ queryKey: ["dpt-realtime"] });
+      toast({
+        title: "Preparo finalizado",
+        description: `Pedido #${pedidoId.slice(0, 8)} pronto para entrega`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Não foi possível finalizar o preparo",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setUpdatingPedidoId(null);
+    },
+  });
+
+  const getDptInfo = (pedidoId: string) => {
+    const info = dptRealtimeData.find(d => d.pedidoId === pedidoId);
+    return info ? {
+      tempoRestante: info.tempoRestante,
+      progresso: info.progresso,
+      atrasado: info.atrasado,
+    } : undefined;
+  };
 
   const playNotificationSound = useCallback(() => {
     if (soundEnabled) {
@@ -182,13 +280,31 @@ export default function Cozinha() {
     updateStatus.mutate({ pedidoId, status: newStatus });
   };
 
+  const sortByDPTPriority = (pedidosList: Pedido[]) => {
+    return [...pedidosList].sort((a, b) => {
+      const aInfo = dptRealtimeData.find(d => d.pedidoId === a.id);
+      const bInfo = dptRealtimeData.find(d => d.pedidoId === b.id);
+      
+      if (aInfo && bInfo) {
+        return aInfo.prioridadeOrdenacao - bInfo.prioridadeOrdenacao;
+      }
+      
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+  };
+
   const pedidosByStatus = {
-    recebido: pedidos.filter(p => p.status === "recebido"),
-    em_preparo: pedidos.filter(p => p.status === "em_preparo"),
-    pronto: pedidos.filter(p => p.status === "pronto"),
+    recebido: sortByDPTPriority(pedidos.filter(p => p.status === "recebido")),
+    em_preparo: sortByDPTPriority(pedidos.filter(p => p.status === "em_preparo")),
+    pronto: sortByDPTPriority(pedidos.filter(p => p.status === "pronto")),
   };
 
   const totalPendentes = pedidosByStatus.recebido.length + pedidosByStatus.em_preparo.length;
+  
+  const atrasados = dptRealtimeData.filter(d => d.atrasado).length;
+  const avgProgress = dptRealtimeData.length > 0 
+    ? Math.round(dptRealtimeData.reduce((sum, d) => sum + d.progresso, 0) / dptRealtimeData.length)
+    : 0;
 
   const KDSContent = () => (
     <div className="space-y-4 md:space-y-6">
@@ -209,6 +325,20 @@ export default function Cozinha() {
         </div>
         
         <div className="flex items-center gap-2 flex-wrap">
+          {dptRealtimeData.length > 0 && (
+            <div className="flex items-center gap-3 mr-2">
+              <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full bg-blue-50 border border-blue-200">
+                <Gauge className="w-3.5 h-3.5 text-blue-600" />
+                <span className="text-blue-700 font-medium">DPT: {avgProgress}%</span>
+              </div>
+              {atrasados > 0 && (
+                <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full bg-red-50 border border-red-200 animate-pulse">
+                  <Clock className="w-3.5 h-3.5 text-red-600" />
+                  <span className="text-red-700 font-medium">{atrasados} atrasados</span>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-full bg-muted">
             {isConnected ? (
               <>
@@ -307,8 +437,10 @@ export default function Cozinha() {
                     key={pedido.id}
                     pedido={pedido}
                     onStatusChange={handleStatusChange}
+                    onStartPreparo={(id) => startPreparo.mutate(id)}
                     isUpdating={updatingPedidoId === pedido.id}
                     compact={pedidosByStatus.recebido.length > 3}
+                    dptInfo={getDptInfo(pedido.id)}
                   />
                 ))
               )}
@@ -337,8 +469,10 @@ export default function Cozinha() {
                     key={pedido.id}
                     pedido={pedido}
                     onStatusChange={handleStatusChange}
+                    onFinishPreparo={(id) => finishPreparo.mutate(id)}
                     isUpdating={updatingPedidoId === pedido.id}
                     compact={pedidosByStatus.em_preparo.length > 3}
+                    dptInfo={getDptInfo(pedido.id)}
                   />
                 ))
               )}
@@ -369,6 +503,7 @@ export default function Cozinha() {
                     onStatusChange={handleStatusChange}
                     isUpdating={updatingPedidoId === pedido.id}
                     compact={pedidosByStatus.pronto.length > 3}
+                    dptInfo={getDptInfo(pedido.id)}
                   />
                 ))
               )}
