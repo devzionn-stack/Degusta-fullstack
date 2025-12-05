@@ -99,6 +99,12 @@ export interface IStorage {
 
   getLogsN8n(tenantId: string): Promise<LogN8n[]>;
   createLogN8n(log: InsertLogN8n): Promise<LogN8n>;
+
+  updateMotoboyLocation(tenantId: string, motoboyId: string, lat: number, lng: number): Promise<Motoboy | undefined>;
+
+  getTransacoes(tenantId: string, filters: { tipo?: string; status?: string }): Promise<Transacao[]>;
+  createTransacao(transacao: InsertTransacao): Promise<Transacao>;
+  updateTransacaoStatus(tenantId: string, transacaoId: string, status: string): Promise<Transacao | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -509,6 +515,53 @@ export class DatabaseStorage implements IStorage {
       }))
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, limit);
+  }
+
+  async updateMotoboyLocation(tenantId: string, motoboyId: string, lat: number, lng: number): Promise<Motoboy | undefined> {
+    const [updated] = await db
+      .update(motoboys)
+      .set({ 
+        lat: lat.toString(),
+        lng: lng.toString(),
+        lastLocationUpdate: new Date(),
+      })
+      .where(and(eq(motoboys.id, motoboyId), eq(motoboys.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getTransacoes(tenantId: string, filters: { tipo?: string; status?: string }): Promise<Transacao[]> {
+    const conditions = [eq(transacoes.tenantId, tenantId)];
+    
+    if (filters.tipo) {
+      conditions.push(eq(transacoes.tipo, filters.tipo));
+    }
+    if (filters.status) {
+      conditions.push(eq(transacoes.status, filters.status));
+    }
+    
+    return await db
+      .select()
+      .from(transacoes)
+      .where(and(...conditions))
+      .orderBy(desc(transacoes.data));
+  }
+
+  async createTransacao(insertTransacao: InsertTransacao): Promise<Transacao> {
+    const [transacao] = await db
+      .insert(transacoes)
+      .values(insertTransacao)
+      .returning();
+    return transacao;
+  }
+
+  async updateTransacaoStatus(tenantId: string, transacaoId: string, status: string): Promise<Transacao | undefined> {
+    const [updated] = await db
+      .update(transacoes)
+      .set({ status })
+      .where(and(eq(transacoes.id, transacaoId), eq(transacoes.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
   }
 }
 

@@ -146,25 +146,6 @@ export default function Logistica() {
     refetchInterval: 60000,
   });
 
-  const updateLocationMutation = useMutation({
-    mutationFn: async ({ motoboyId, lat, lng }: { motoboyId: string; lat: number; lng: number }) => {
-      const res = await fetch(`/api/motoboys/${motoboyId}/location`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ lat, lng }),
-      });
-      if (!res.ok) throw new Error("Erro ao atualizar localização");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["motoboys"] });
-      toast({
-        title: "Localização Atualizada",
-        description: "A localização do motoboy foi atualizada.",
-      });
-    },
-  });
 
   const motoboysComLocalizacao = useMemo(() => {
     return motoboys.filter(m => m.lat && m.lng);
@@ -233,39 +214,34 @@ export default function Logistica() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <KPICard
-            title="Tempo Médio de Entrega"
-            value={stats?.tempoMedioEntrega ? `${stats.tempoMedioEntrega} min` : "-- min"}
-            variation={stats?.variacaoTempo || 0}
-            icon={Clock}
-            iconColor="text-blue-600"
+            titulo="Tempo Médio de Entrega"
+            valor={stats?.tempoMedioEntrega ? `${stats.tempoMedioEntrega} min` : "-- min"}
+            variacaoPercentual={stats?.variacaoTempo ? -Math.abs(stats.variacaoTempo) : undefined}
+            icone={Clock}
+            corIcone="text-blue-600"
             loading={loadingStats}
-            testId="kpi-tempo-medio"
           />
           <KPICard
-            title="Atrasos Hoje"
-            value={stats?.atrasosHoje?.toString() || "0"}
-            variation={stats?.variacaoAtrasos || 0}
-            invertVariation
-            icon={AlertTriangle}
-            iconColor="text-red-600"
+            titulo="Atrasos Hoje"
+            valor={stats?.atrasosHoje?.toString() || "0"}
+            variacaoPercentual={stats?.variacaoAtrasos ? -Math.abs(stats.variacaoAtrasos) : undefined}
+            icone={AlertTriangle}
+            corIcone="text-red-600"
             loading={loadingStats}
-            testId="kpi-atrasos"
           />
           <KPICard
-            title="Entregas Hoje"
-            value={stats?.entregasHoje?.toString() || "0"}
-            icon={CheckCircle}
-            iconColor="text-green-600"
+            titulo="Entregas Hoje"
+            valor={stats?.entregasHoje?.toString() || "0"}
+            icone={CheckCircle}
+            corIcone="text-green-600"
             loading={loadingStats}
-            testId="kpi-entregas"
           />
           <KPICard
-            title="Motoboys Ativos"
-            value={motoboysAtivos.length.toString()}
-            icon={Truck}
-            iconColor="text-orange-600"
+            titulo="Motoboys Ativos"
+            valor={motoboysAtivos.length.toString()}
+            icone={Truck}
+            corIcone="text-orange-600"
             loading={loadingMotoboys}
-            testId="kpi-motoboys"
           />
         </div>
 

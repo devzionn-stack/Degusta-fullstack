@@ -11,6 +11,7 @@ import Dashboard from "@/pages/Dashboard";
 import Cozinha from "@/pages/Cozinha";
 import Pedidos from "@/pages/Pedidos";
 import PedidoDetails from "@/pages/PedidoDetails";
+import Logistica from "@/pages/Logistica";
 import Financeiro from "@/pages/Financeiro";
 import Configuracoes from "@/pages/Configuracoes";
 import Rastreio from "@/pages/Rastreio";
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/dashboard/pedidos" component={Pedidos} />
       <Route path="/pedidos/:id" component={PedidoDetails} />
+      <Route path="/dashboard/logistica" component={Logistica} />
       <Route path="/dashboard/financeiro" component={Financeiro} />
       <Route path="/dashboard/configuracoes" component={Configuracoes} />
       <Route path="/cozinha" component={Cozinha} />

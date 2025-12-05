@@ -1077,5 +1077,298 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // LOGISTICS ROUTES
+  // ============================================
+
+  app.get("/api/analytics/logistics", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      
+      const pedidos = await storage.getPedidos(tenantId);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      const pedidosHoje = pedidos.filter(p => {
+        const pedidoDate = new Date(p.createdAt);
+        pedidoDate.setHours(0, 0, 0, 0);
+        return pedidoDate.getTime() === today.getTime();
+      });
+      
+      const pedidosOntem = pedidos.filter(p => {
+        const pedidoDate = new Date(p.createdAt);
+        pedidoDate.setHours(0, 0, 0, 0);
+        return pedidoDate.getTime() === yesterday.getTime();
+      });
+      
+      const entreguesHoje = pedidosHoje.filter(p => p.status === "entregue");
+      const entreguesOntem = pedidosOntem.filter(p => p.status === "entregue");
+      
+      const calcTempoMedio = (pedidosList: typeof pedidos) => {
+        const entregues = pedidosList.filter(p => 
+          p.status === "entregue" && p.trackingStartedAt && p.updatedAt
+        );
+        if (entregues.length === 0) return 0;
+        
+        const tempos = entregues.map(p => {
+          const inicio = new Date(p.trackingStartedAt!).getTime();
+          const fim = new Date(p.updatedAt).getTime();
+          return (fim - inicio) / 60000;
+        });
+        return Math.round(tempos.reduce((a, b) => a + b, 0) / tempos.length);
+      };
+      
+      const tempoMedioHoje = calcTempoMedio(pedidosHoje);
+      const tempoMedioOntem = calcTempoMedio(pedidosOntem);
+      
+      const atrasosHoje = pedidosHoje.filter(p => {
+        if (p.status === "entregue" && p.trackingStartedAt && p.updatedAt) {
+          const inicio = new Date(p.trackingStartedAt).getTime();
+          const fim = new Date(p.updatedAt).getTime();
+          return (fim - inicio) / 60000 > 45;
+        }
+        return false;
+      }).length;
+      
+      const atrasosOntem = pedidosOntem.filter(p => {
+        if (p.status === "entregue" && p.trackingStartedAt && p.updatedAt) {
+          const inicio = new Date(p.trackingStartedAt).getTime();
+          const fim = new Date(p.updatedAt).getTime();
+          return (fim - inicio) / 60000 > 45;
+        }
+        return false;
+      }).length;
+      
+      const motoboys = await storage.getMotoboys(tenantId);
+      const motoboyAtivos = motoboys.filter(m => 
+        m.status === "disponivel" || m.status === "em_entrega"
+      ).length;
+      
+      const variacaoTempo = tempoMedioOntem > 0 
+        ? Math.round(((tempoMedioHoje - tempoMedioOntem) / tempoMedioOntem) * 100)
+        : 0;
+      
+      const variacaoAtrasos = atrasosOntem > 0
+        ? Math.round(((atrasosHoje - atrasosOntem) / atrasosOntem) * 100)
+        : (atrasosHoje > 0 ? 100 : 0);
+      
+      res.json({
+        tempoMedioEntrega: tempoMedioHoje || 25,
+        atrasosHoje,
+        entregasHoje: entreguesHoje.length,
+        motoboyAtivos,
+        variacaoTempo,
+        variacaoAtrasos,
+      });
+    } catch (error) {
+      console.error("Error fetching logistics stats:", error);
+      res.status(500).json({ error: "Failed to fetch logistics stats" });
+    }
+  });
+
+  app.patch("/api/motoboys/:id/location", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const motoboyId = req.params.id;
+      const { lat, lng } = req.body;
+
+      if (lat === undefined || lng === undefined) {
+        return res.status(400).json({ error: "lat e lng são obrigatórios" });
+      }
+
+      const motoboy = await storage.updateMotoboyLocation(tenantId, motoboyId, lat, lng);
+      if (!motoboy) {
+        return res.status(404).json({ error: "Motoboy não encontrado" });
+      }
+
+      res.json(motoboy);
+    } catch (error) {
+      console.error("Error updating motoboy location:", error);
+      res.status(500).json({ error: "Failed to update location" });
+    }
+  });
+
+  // ============================================
+  // FINANCIAL ROUTES
+  // ============================================
+
+  app.get("/api/transacoes", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { tipo, status } = req.query;
+      
+      const filters: { tipo?: string; status?: string } = {};
+      if (tipo && typeof tipo === 'string') filters.tipo = tipo;
+      if (status && typeof status === 'string') filters.status = status;
+      
+      const transacoes = await storage.getTransacoes(tenantId, filters);
+      res.json(transacoes);
+    } catch (error) {
+      console.error("Error fetching transacoes:", error);
+      res.status(500).json({ error: "Failed to fetch transacoes" });
+    }
+  });
+
+  app.post("/api/transacoes", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { pedidoId, tipo, valor, descricao, metodoPagamento, status } = req.body;
+
+      if (!tipo || valor === undefined) {
+        return res.status(400).json({ error: "tipo e valor são obrigatórios" });
+      }
+
+      const transacao = await storage.createTransacao({
+        tenantId,
+        pedidoId: pedidoId || null,
+        tipo,
+        valor: valor.toString(),
+        descricao: descricao || null,
+        metodoPagamento: metodoPagamento || null,
+        status: status || "pendente",
+      });
+
+      res.status(201).json(transacao);
+    } catch (error) {
+      console.error("Error creating transacao:", error);
+      res.status(500).json({ error: "Failed to create transacao" });
+    }
+  });
+
+  app.patch("/api/transacoes/:id/status", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const transacaoId = req.params.id;
+      const { status } = req.body;
+
+      if (!status) {
+        return res.status(400).json({ error: "status é obrigatório" });
+      }
+
+      const transacao = await storage.updateTransacaoStatus(tenantId, transacaoId, status);
+      if (!transacao) {
+        return res.status(404).json({ error: "Transação não encontrada" });
+      }
+
+      res.json(transacao);
+    } catch (error) {
+      console.error("Error updating transacao status:", error);
+      res.status(500).json({ error: "Failed to update transacao" });
+    }
+  });
+
+  app.get("/api/analytics/financial", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      
+      const transacoes = await storage.getTransacoes(tenantId, {});
+      
+      const transacoesMesAtual = transacoes.filter(t => 
+        new Date(t.data) >= startOfMonth && t.status === "confirmado"
+      );
+      
+      const transacoesMesAnterior = transacoes.filter(t => {
+        const data = new Date(t.data);
+        return data >= startOfLastMonth && data <= endOfLastMonth && t.status === "confirmado";
+      });
+      
+      const calcular = (lista: typeof transacoes) => {
+        const receitas = lista
+          .filter(t => t.tipo === "receita" || t.tipo === "venda")
+          .reduce((acc, t) => acc + parseFloat(t.valor || "0"), 0);
+        const despesas = lista
+          .filter(t => t.tipo === "despesa" || t.tipo === "custo")
+          .reduce((acc, t) => acc + parseFloat(t.valor || "0"), 0);
+        return { receitas, despesas, lucro: receitas - despesas };
+      };
+      
+      const atual = calcular(transacoesMesAtual);
+      const anterior = calcular(transacoesMesAnterior);
+      
+      const variacaoReceitas = anterior.receitas > 0 
+        ? Math.round(((atual.receitas - anterior.receitas) / anterior.receitas) * 100)
+        : (atual.receitas > 0 ? 100 : 0);
+      
+      const variacaoDespesas = anterior.despesas > 0
+        ? Math.round(((atual.despesas - anterior.despesas) / anterior.despesas) * 100)
+        : (atual.despesas > 0 ? 100 : 0);
+      
+      const variacaoLucro = anterior.lucro > 0
+        ? Math.round(((atual.lucro - anterior.lucro) / anterior.lucro) * 100)
+        : (atual.lucro > 0 ? 100 : 0);
+      
+      res.json({
+        receitas: atual.receitas,
+        despesas: atual.despesas,
+        lucroLiquido: atual.lucro,
+        variacaoReceitas,
+        variacaoDespesas,
+        variacaoLucro,
+        totalTransacoes: transacoesMesAtual.length,
+      });
+    } catch (error) {
+      console.error("Error fetching financial stats:", error);
+      res.status(500).json({ error: "Failed to fetch financial stats" });
+    }
+  });
+
+  app.get("/api/transacoes/export-csv", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { startDate, endDate, tipo, status } = req.query;
+      
+      const filters: { tipo?: string; status?: string } = {};
+      if (tipo && typeof tipo === 'string') filters.tipo = tipo;
+      if (status && typeof status === 'string') filters.status = status;
+      
+      let transacoes = await storage.getTransacoes(tenantId, filters);
+      
+      if (startDate && typeof startDate === 'string') {
+        const start = new Date(startDate);
+        transacoes = transacoes.filter(t => new Date(t.data) >= start);
+      }
+      
+      if (endDate && typeof endDate === 'string') {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        transacoes = transacoes.filter(t => new Date(t.data) <= end);
+      }
+      
+      const headers = ["ID", "Data", "Tipo", "Valor", "Status", "Método Pagamento", "Descrição", "Pedido ID"];
+      
+      const rows = transacoes.map(t => [
+        t.id,
+        new Date(t.data).toLocaleDateString("pt-BR"),
+        t.tipo,
+        parseFloat(t.valor || "0").toFixed(2),
+        t.status,
+        t.metodoPagamento || "",
+        (t.descricao || "").replace(/"/g, '""'),
+        t.pedidoId || "",
+      ]);
+      
+      const csvContent = [
+        headers.join(","),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+      ].join("\n");
+      
+      const BOM = "\uFEFF";
+      
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="transacoes_${new Date().toISOString().split('T')[0]}.csv"`);
+      res.send(BOM + csvContent);
+    } catch (error) {
+      console.error("Error exporting CSV:", error);
+      res.status(500).json({ error: "Failed to export CSV" });
+    }
+  });
+
   return httpServer;
 }

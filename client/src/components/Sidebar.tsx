@@ -51,7 +51,7 @@ const navItems = [
   { icon: Users, label: "Clientes", path: "/dashboard/clientes" },
   { icon: Package, label: "Produtos", path: "/dashboard/produtos" },
   { icon: Warehouse, label: "Estoque", path: "/dashboard/estoque" },
-  { icon: Truck, label: "Motoboys", path: "/dashboard/motoboys" },
+  { icon: Truck, label: "Logística", path: "/dashboard/logistica" },
   { icon: DollarSign, label: "Financeiro", path: "/dashboard/financeiro" },
   { icon: Settings, label: "Configurações", path: "/dashboard/configuracoes" },
 ];

@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { MapPin, Clock, Truck, CheckCircle, Package, Navigation } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { MapPin, Clock, Truck, CheckCircle, Package, Navigation, AlertCircle } from "lucide-react";
 
 interface TrackingData {
   lat: number;
@@ -40,6 +43,70 @@ const trackingStatusLabels: Record<string, string> = {
   finalizado: "Entregue",
 };
 
+const PIZZERIA_LOCATION: [number, number] = [-23.5505, -46.6333];
+
+const motoboyIcon = L.divIcon({
+  className: "custom-motoboy-marker",
+  html: `
+    <div style="
+      background: #ea580c;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      border: 3px solid white;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+      animation: pulse 2s infinite;
+    ">
+      🛵
+    </div>
+    <style>
+      @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+      }
+    </style>
+  `,
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
+  popupAnchor: [0, -22],
+});
+
+const destinationIcon = L.divIcon({
+  className: "custom-destination-marker",
+  html: `
+    <div style="
+      background: #22c55e;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      border: 3px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    ">
+      📍
+    </div>
+  `,
+  iconSize: [36, 36],
+  iconAnchor: [18, 18],
+  popupAnchor: [0, -18],
+});
+
+function MapUpdater({ center, zoom }: { center: [number, number]; zoom: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [center, zoom, map]);
+  return null;
+}
+
 export default function Rastreio() {
   const params = useParams();
   const trackingToken = params.pedidoId || params.trackingToken;
@@ -58,6 +125,26 @@ export default function Rastreio() {
     refetchInterval: 30000,
     enabled: !!trackingToken,
   });
+
+  const mapCenter = useMemo<[number, number]>(() => {
+    if (tracking?.trackingData?.lat && tracking?.trackingData?.lng) {
+      return [tracking.trackingData.lat, tracking.trackingData.lng];
+    }
+    return PIZZERIA_LOCATION;
+  }, [tracking]);
+
+  const routeLine = useMemo(() => {
+    if (!tracking?.trackingData?.lat || !tracking?.trackingData?.lng) return null;
+    
+    const motoboyPos: [number, number] = [tracking.trackingData.lat, tracking.trackingData.lng];
+    const destLat = tracking.trackingData.lat + 0.01;
+    const destLng = tracking.trackingData.lng + 0.015;
+    
+    return {
+      motoboy: motoboyPos,
+      destination: [destLat, destLng] as [number, number],
+    };
+  }, [tracking]);
 
   useEffect(() => {
     if (tracking?.trackingData?.eta) {
@@ -103,7 +190,7 @@ export default function Rastreio() {
       <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white flex items-center justify-center p-4" data-testid="error-container">
         <Card className="max-w-md w-full">
           <CardContent className="pt-6 text-center">
-            <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-800 mb-2">
               Rastreamento não disponível
             </h2>
@@ -130,13 +217,78 @@ export default function Rastreio() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
-      <div className="max-w-lg mx-auto p-4 py-8">
+      <div className="max-w-2xl mx-auto p-4 py-8">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-gray-800 mb-1">
             🍕 Bella Napoli
           </h1>
           <p className="text-gray-600">Rastreamento do Pedido</p>
         </div>
+
+        {!isDelivered && tracking.trackingData && (
+          <div className="mb-6 rounded-xl overflow-hidden shadow-lg border" data-testid="map-container">
+            <div className="h-[300px] relative">
+              <MapContainer
+                center={mapCenter}
+                zoom={15}
+                style={{ height: "100%", width: "100%" }}
+                scrollWheelZoom={false}
+                dragging={true}
+                zoomControl={true}
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                <MapUpdater center={mapCenter} zoom={15} />
+                
+                {tracking.trackingData.lat && tracking.trackingData.lng && (
+                  <Marker 
+                    position={[tracking.trackingData.lat, tracking.trackingData.lng]} 
+                    icon={motoboyIcon}
+                  >
+                    <Popup>
+                      <div className="text-center p-1">
+                        <strong className="text-lg">🛵 Seu pedido</strong>
+                        <p className="text-sm text-gray-600">
+                          {trackingStatusLabels[tracking.trackingData.status] || "Em andamento"}
+                        </p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                )}
+                
+                {routeLine && (
+                  <>
+                    <Marker position={routeLine.destination} icon={destinationIcon}>
+                      <Popup>
+                        <div className="text-center p-1">
+                          <strong>📍 Destino</strong>
+                          <p className="text-sm text-gray-600">
+                            {tracking.enderecoEntrega || "Endereço de entrega"}
+                          </p>
+                        </div>
+                      </Popup>
+                    </Marker>
+                    
+                    <Polyline
+                      positions={[routeLine.motoboy, routeLine.destination]}
+                      color="#ea580c"
+                      weight={4}
+                      opacity={0.7}
+                      dashArray="10, 10"
+                    />
+                  </>
+                )}
+              </MapContainer>
+              
+              <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg px-3 py-2 z-[1000]">
+                <p className="text-xs text-gray-500">Atualização automática</p>
+                <p className="text-sm font-medium text-orange-600">a cada 30s</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <Card className="mb-6" data-testid="tracking-card">
           <CardHeader className="pb-2">
@@ -168,15 +320,18 @@ export default function Rastreio() {
                   </div>
                 </div>
 
-                <div className="bg-orange-50 rounded-lg p-4 mb-4" data-testid="eta-container">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-orange-100 rounded-full">
-                      <Clock className="w-5 h-5 text-orange-600" />
+                <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl p-5 mb-4 border border-orange-200" data-testid="eta-container">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-orange-500 rounded-full shadow-lg">
+                      <Clock className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Tempo estimado</p>
-                      <p className="text-lg font-semibold text-gray-800" data-testid="eta-time">
+                      <p className="text-sm text-orange-700 font-medium">ETA Preditivo</p>
+                      <p className="text-3xl font-bold text-gray-800" data-testid="eta-time">
                         {timeLeft || "Calculando..."}
+                      </p>
+                      <p className="text-xs text-orange-600 mt-1">
+                        Previsão baseada em tempo real
                       </p>
                     </div>
                   </div>
@@ -249,33 +404,6 @@ export default function Rastreio() {
             </CardContent>
           </Card>
         )}
-
-        <div className="mt-6 bg-blue-50 rounded-lg p-4" data-testid="map-container">
-          <div className="flex items-center gap-2 mb-3">
-            <MapPin className="w-5 h-5 text-blue-600" />
-            <span className="text-sm font-medium text-blue-800">Mapa de Rastreamento</span>
-          </div>
-          <div className="bg-gray-200 rounded-lg h-48 flex items-center justify-center relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-green-100 to-green-200 opacity-50" />
-            <div className="relative z-10 text-center">
-              <div className="text-4xl mb-2">🛵</div>
-              <p className="text-sm text-gray-700">
-                {tracking.trackingData?.lat && tracking.trackingData?.lng 
-                  ? `Localização: ${tracking.trackingData.lat.toFixed(4)}, ${tracking.trackingData.lng.toFixed(4)}`
-                  : "Localizando entregador..."
-                }
-              </p>
-              {tracking.trackingData?.lastUpdate && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Atualizado: {new Date(tracking.trackingData.lastUpdate).toLocaleTimeString('pt-BR')}
-                </p>
-              )}
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 mt-2 text-center">
-            O mapa é atualizado automaticamente a cada 30 segundos
-          </p>
-        </div>
 
         <p className="text-center text-xs text-gray-400 mt-8">
           Pedido feito em {new Date(tracking.createdAt).toLocaleDateString('pt-BR')}
