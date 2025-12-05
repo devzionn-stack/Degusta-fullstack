@@ -1370,5 +1370,238 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // BUSINESS INTELLIGENCE ROUTES
+  // ============================================
+
+  app.get("/api/inteligencia/feedbacks", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const feedbacks = await storage.getFeedbacks(tenantId);
+      res.json(feedbacks);
+    } catch (error) {
+      console.error("Error fetching feedbacks:", error);
+      res.status(500).json({ error: "Failed to fetch feedbacks" });
+    }
+  });
+
+  app.get("/api/inteligencia/sentiment-summary", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const summary = await storage.getFeedbackSentimentSummary(tenantId);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching sentiment summary:", error);
+      res.status(500).json({ error: "Failed to fetch sentiment summary" });
+    }
+  });
+
+  app.get("/api/inteligencia/topicos-criticos", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const limit = parseInt(req.query.limit as string) || 5;
+      const topicos = await storage.getTopicosCriticos(tenantId, limit);
+      res.json(topicos);
+    } catch (error) {
+      console.error("Error fetching critical topics:", error);
+      res.status(500).json({ error: "Failed to fetch critical topics" });
+    }
+  });
+
+  app.post("/api/inteligencia/feedbacks", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { pedidoId, clienteId, texto, sentimento, topicos } = req.body;
+      
+      const feedback = await storage.createFeedback({
+        tenantId,
+        pedidoId: pedidoId || null,
+        clienteId: clienteId || null,
+        texto,
+        sentimento: sentimento ?? 3,
+        topicos: topicos || [],
+      });
+      
+      res.status(201).json(feedback);
+    } catch (error) {
+      console.error("Error creating feedback:", error);
+      res.status(500).json({ error: "Failed to create feedback" });
+    }
+  });
+
+  // ============================================
+  // STOCK PREDICTIONS ROUTES
+  // ============================================
+
+  app.get("/api/estoque/previsoes", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const previsoes = await storage.getPrevisoes(tenantId);
+      res.json(previsoes);
+    } catch (error) {
+      console.error("Error fetching previsoes:", error);
+      res.status(500).json({ error: "Failed to fetch previsoes" });
+    }
+  });
+
+  app.post("/api/estoque/previsoes", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { produtoId, produtoNome, quantidadeAtual, quantidadeSugerida, confianca, motivo } = req.body;
+      
+      const previsao = await storage.createPrevisao({
+        tenantId,
+        produtoId,
+        produtoNome,
+        quantidadeAtual: quantidadeAtual ?? 0,
+        quantidadeSugerida: quantidadeSugerida ?? 0,
+        confianca: confianca ?? 0.8,
+        motivo: motivo || null,
+        status: "pendente",
+      });
+      
+      res.status(201).json(previsao);
+    } catch (error) {
+      console.error("Error creating previsao:", error);
+      res.status(500).json({ error: "Failed to create previsao" });
+    }
+  });
+
+  app.patch("/api/estoque/previsoes/:id/status", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      const { status } = req.body;
+      
+      if (!["pendente", "aprovada", "rejeitada"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+      
+      const updated = await storage.updatePrevisaoStatus(id, tenantId, status);
+      if (!updated) {
+        return res.status(404).json({ error: "Previsao not found" });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating previsao status:", error);
+      res.status(500).json({ error: "Failed to update previsao status" });
+    }
+  });
+
+  app.post("/api/estoque/gerar-previsoes", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      
+      const estoqueItens = await storage.getEstoque(tenantId);
+      const produtos = await storage.getProdutos(tenantId);
+      
+      const produtoMap = new Map(produtos.map(p => [p.id, p]));
+      const novasPrevisoes = [];
+      
+      for (const item of estoqueItens) {
+        const produto = produtoMap.get(item.produtoId);
+        if (!produto) continue;
+        
+        const qtdAtual = item.quantidade;
+        const minimo = item.quantidadeMinima ?? 10;
+        
+        if (qtdAtual < minimo * 2) {
+          const sugerida = Math.max(minimo * 3 - qtdAtual, minimo);
+          const confianca = qtdAtual < minimo ? 0.95 : 0.75;
+          
+          const previsao = await storage.createPrevisao({
+            tenantId,
+            produtoId: item.produtoId,
+            produtoNome: produto.nome,
+            quantidadeAtual: qtdAtual,
+            quantidadeSugerida: sugerida,
+            confianca,
+            motivo: qtdAtual < minimo 
+              ? "Estoque abaixo do mínimo" 
+              : "Estoque próximo do mínimo",
+            status: "pendente",
+          });
+          
+          novasPrevisoes.push(previsao);
+        }
+      }
+      
+      res.json({ 
+        message: `${novasPrevisoes.length} previsões geradas`,
+        previsoes: novasPrevisoes 
+      });
+    } catch (error) {
+      console.error("Error generating previsoes:", error);
+      res.status(500).json({ error: "Failed to generate previsoes" });
+    }
+  });
+
+  // ============================================
+  // ALERTS ROUTES
+  // ============================================
+
+  app.get("/api/alertas", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const alertas = await storage.getAlertas(tenantId, limit);
+      res.json(alertas);
+    } catch (error) {
+      console.error("Error fetching alertas:", error);
+      res.status(500).json({ error: "Failed to fetch alertas" });
+    }
+  });
+
+  app.get("/api/alertas/nao-lidos", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const count = await storage.getAlertasNaoLidos(tenantId);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching unread alerts count:", error);
+      res.status(500).json({ error: "Failed to fetch unread alerts count" });
+    }
+  });
+
+  app.post("/api/alertas", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { tipo, titulo, mensagem, severidade, meta } = req.body;
+      
+      const alerta = await storage.createAlerta({
+        tenantId,
+        tipo,
+        titulo,
+        mensagem,
+        severidade: severidade || "info",
+        meta: meta || null,
+        lida: false,
+      });
+      
+      res.status(201).json(alerta);
+    } catch (error) {
+      console.error("Error creating alerta:", error);
+      res.status(500).json({ error: "Failed to create alerta" });
+    }
+  });
+
+  app.patch("/api/alertas/:id/lida", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      
+      const updated = await storage.markAlertaLido(id, tenantId);
+      if (!updated) {
+        return res.status(404).json({ error: "Alerta not found" });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error marking alerta as read:", error);
+      res.status(500).json({ error: "Failed to mark alerta as read" });
+    }
+  });
+
   return httpServer;
 }
