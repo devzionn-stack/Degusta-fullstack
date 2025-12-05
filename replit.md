@@ -77,7 +77,8 @@ Core tables with UUID primary keys:
 - `clientes` - customer records scoped to tenant
 - `produtos` - product/menu items scoped to tenant  
 - `estoque` - inventory tracking linked to products and tenants
-- `pedidos` - orders with JSONB items array, scoped to tenant
+- `pedidos` - orders with JSONB items array, DPT tracking fields (tempo_preparo_estimado_min, horario_inicio_preparo, horario_fim_preparo_estimado), scoped to tenant
+- `historico_preparo` - tracks actual vs estimated prep times for DPT ML optimization
 - `motoboys` - delivery drivers with status and real-time location tracking
 - `transacoes` - financial transactions with payment methods and status
 - `feedbacks` - customer feedback with sentiment analysis (1-5 scale) and topic tags (JSONB array)
@@ -134,6 +135,31 @@ Core tables with UUID primary keys:
 **External Service Integrations**:
 - N8N workflow automation (API key stored per tenant for webhook/automation integration)
 - Optional: OpenGraph image meta tags dynamically updated for deployment URLs
+
+### Dynamic Prep Time (DPT) System
+
+**Service**: `server/dpt_calculator.ts` - ML-based preparation time estimation
+
+**Key Features**:
+- Calculates dynamic prep times using historical data and queue analysis
+- Considers product base prep times, queue length factor, and historical accuracy
+- Real-time monitoring of all active orders with progress tracking
+- Priority-based order sorting for optimal kitchen workflow
+
+**API Endpoints** (all protected with requireAuth + requireTenant):
+- `GET /api/dpt/realtime` - Real-time DPT info for all active orders
+- `POST /api/dpt/calcular` - Manual DPT calculation for items
+- `POST /api/dpt/iniciar-preparo/:pedidoId` - Start prep time tracking
+- `POST /api/dpt/finalizar-preparo/:pedidoId` - Record actual prep time for ML optimization
+
+**Kitchen Display System (KDS)** - `client/src/pages/Cozinha.tsx`:
+- Real-time WebSocket updates with sound alerts for new orders
+- Progress bars showing elapsed vs estimated prep time
+- Color-coded urgency indicators (green/yellow/red)
+- Priority-based order sorting using DPT data
+- DPT stats display in header (average progress, delayed orders count)
+
+**Status Coverage**: Includes 'recebido', 'em_preparo', 'pendente', 'confirmado' for complete order tracking
 
 **Deployment Considerations**:
 - Environment variable `DATABASE_URL` required
