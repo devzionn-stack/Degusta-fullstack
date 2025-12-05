@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, decimal, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, decimal, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -113,6 +113,42 @@ export const transacoes = pgTable("transacoes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const feedbacks = pgTable("feedbacks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  pedidoId: varchar("pedido_id").references(() => pedidos.id, { onDelete: "set null" }),
+  clienteId: varchar("cliente_id").references(() => clientes.id, { onDelete: "set null" }),
+  sentimento: decimal("sentimento", { precision: 5, scale: 2 }).notNull(),
+  topicos: jsonb("topicos").$type<string[]>().default([]),
+  comentario: text("comentario"),
+  nota: integer("nota"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const previsaoEstoque = pgTable("previsao_estoque", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  ingrediente: text("ingrediente").notNull(),
+  unidade: text("unidade").notNull().default('un'),
+  quantidadeAtual: integer("quantidade_atual").notNull().default(0),
+  quantidadeSugerida: integer("quantidade_sugerida").notNull().default(0),
+  horizonteDias: integer("horizonte_dias").notNull().default(7),
+  confianca: decimal("confianca", { precision: 5, scale: 2 }),
+  status: text("status").notNull().default('pendente'),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const alertasFrota = pgTable("alertas_frota", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  tipo: text("tipo").notNull(),
+  severidade: text("severidade").notNull().default('info'),
+  mensagem: text("mensagem").notNull(),
+  meta: jsonb("meta").$type<Record<string, any>>(),
+  lida: boolean("lida").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertTenantSchema = createInsertSchema(tenants).omit({
   id: true,
   createdAt: true,
@@ -172,8 +208,25 @@ export const insertTransacaoSchema = createInsertSchema(transacoes).omit({
   createdAt: true,
 });
 
+export const insertFeedbackSchema = createInsertSchema(feedbacks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPrevisaoEstoqueSchema = createInsertSchema(previsaoEstoque).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAlertaFrotaSchema = createInsertSchema(alertasFrota).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const tipoTransacaoEnum = z.enum(["receita", "despesa"]);
 export const statusTransacaoEnum = z.enum(["pendente", "confirmado", "cancelado"]);
+export const severidadeAlertaEnum = z.enum(["info", "warn", "critical"]);
+export const tipoAlertaEnum = z.enum(["motoboy_fora_rota", "estoque_critico", "atraso_entrega", "sistema"]);
 
 export const webhookPagamentoSchema = z.object({
   pedidoId: z.string(),
@@ -233,3 +286,12 @@ export type InsertLogN8n = z.infer<typeof insertLogN8nSchema>;
 
 export type Transacao = typeof transacoes.$inferSelect;
 export type InsertTransacao = z.infer<typeof insertTransacaoSchema>;
+
+export type Feedback = typeof feedbacks.$inferSelect;
+export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
+
+export type PrevisaoEstoque = typeof previsaoEstoque.$inferSelect;
+export type InsertPrevisaoEstoque = z.infer<typeof insertPrevisaoEstoqueSchema>;
+
+export type AlertaFrota = typeof alertasFrota.$inferSelect;
+export type InsertAlertaFrota = z.infer<typeof insertAlertaFrotaSchema>;
