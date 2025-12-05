@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -90,6 +91,7 @@ interface Motoboy {
 }
 
 export default function Pedidos() {
+  const [, navigate] = useLocation();
   const [statusFilter, setStatusFilter] = useState("todos");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -397,7 +399,7 @@ export default function Pedidos() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setSelectedPedido(pedido)}
+                            onClick={() => navigate(`/pedidos/${pedido.id}`)}
                             data-testid={`button-view-${pedido.id}`}
                           >
                             <Eye className="h-4 w-4" />
