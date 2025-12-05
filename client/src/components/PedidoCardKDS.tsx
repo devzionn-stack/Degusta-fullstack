@@ -131,6 +131,22 @@ function getWaitTimeInfo(createdAt: string, status: string) {
       urgencyLevel = "yellow";
       urgencyLabel = "Atenção";
     }
+  } else if (status === "pronto") {
+    if (diffMinutes >= 35) {
+      urgencyLevel = "red";
+      urgencyLabel = "Aguardando!";
+    } else if (diffMinutes >= 20) {
+      urgencyLevel = "yellow";
+      urgencyLabel = "Retirar";
+    }
+  } else if (status === "saiu_entrega") {
+    if (diffMinutes >= 60) {
+      urgencyLevel = "red";
+      urgencyLabel = "Verificar!";
+    } else if (diffMinutes >= 40) {
+      urgencyLevel = "yellow";
+      urgencyLabel = "Em rota";
+    }
   }
   
   return { diffMinutes, urgencyLevel, urgencyLabel };
