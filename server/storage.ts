@@ -17,6 +17,12 @@ import {
   type InsertLogN8n,
   type Transacao,
   type InsertTransacao,
+  type Feedback,
+  type InsertFeedback,
+  type PrevisaoEstoque,
+  type InsertPrevisaoEstoque,
+  type AlertaFrota,
+  type InsertAlertaFrota,
   users,
   tenants,
   clientes,
@@ -26,6 +32,9 @@ import {
   pedidos,
   logsN8n,
   transacoes,
+  feedbacks,
+  previsaoEstoque,
+  alertasFrota,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, inArray, sql } from "drizzle-orm";
@@ -105,6 +114,20 @@ export interface IStorage {
   getTransacoes(tenantId: string, filters: { tipo?: string; status?: string }): Promise<Transacao[]>;
   createTransacao(transacao: InsertTransacao): Promise<Transacao>;
   updateTransacaoStatus(tenantId: string, transacaoId: string, status: string): Promise<Transacao | undefined>;
+
+  getFeedbacks(tenantId: string): Promise<Feedback[]>;
+  createFeedback(feedback: InsertFeedback): Promise<Feedback>;
+  getFeedbackSentimentSummary(tenantId: string): Promise<{ sentimentoMedio: number; totalFeedbacks: number }>;
+  getTopicosCriticos(tenantId: string, limit: number): Promise<{ topico: string; ocorrencias: number }[]>;
+
+  getPrevisoes(tenantId: string): Promise<PrevisaoEstoque[]>;
+  createPrevisao(previsao: InsertPrevisaoEstoque): Promise<PrevisaoEstoque>;
+  updatePrevisaoStatus(id: string, tenantId: string, status: string): Promise<PrevisaoEstoque | undefined>;
+
+  getAlertas(tenantId: string, limit: number): Promise<AlertaFrota[]>;
+  getAlertasNaoLidos(tenantId: string): Promise<number>;
+  createAlerta(alerta: InsertAlertaFrota): Promise<AlertaFrota>;
+  markAlertaLido(id: string, tenantId: string): Promise<AlertaFrota | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -560,6 +583,115 @@ export class DatabaseStorage implements IStorage {
       .update(transacoes)
       .set({ status })
       .where(and(eq(transacoes.id, transacaoId), eq(transacoes.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getFeedbacks(tenantId: string): Promise<Feedback[]> {
+    return await db
+      .select()
+      .from(feedbacks)
+      .where(eq(feedbacks.tenantId, tenantId))
+      .orderBy(desc(feedbacks.createdAt));
+  }
+
+  async createFeedback(insertFeedback: InsertFeedback): Promise<Feedback> {
+    const [feedback] = await db
+      .insert(feedbacks)
+      .values(insertFeedback)
+      .returning();
+    return feedback;
+  }
+
+  async getFeedbackSentimentSummary(tenantId: string): Promise<{ sentimentoMedio: number; totalFeedbacks: number }> {
+    const result = await db
+      .select({
+        avg: sql<number>`COALESCE(AVG(${feedbacks.sentimento}), 0)`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(feedbacks)
+      .where(eq(feedbacks.tenantId, tenantId));
+    
+    return {
+      sentimentoMedio: Number(result[0]?.avg || 0),
+      totalFeedbacks: Number(result[0]?.count || 0),
+    };
+  }
+
+  async getTopicosCriticos(tenantId: string, limit: number): Promise<{ topico: string; ocorrencias: number }[]> {
+    const allFeedbacks = await this.getFeedbacks(tenantId);
+    const topicCount: Record<string, number> = {};
+    
+    for (const fb of allFeedbacks) {
+      const topicos = fb.topicos as string[] | null;
+      if (topicos && Array.isArray(topicos)) {
+        for (const topico of topicos) {
+          topicCount[topico] = (topicCount[topico] || 0) + 1;
+        }
+      }
+    }
+    
+    return Object.entries(topicCount)
+      .map(([topico, ocorrencias]) => ({ topico, ocorrencias }))
+      .sort((a, b) => b.ocorrencias - a.ocorrencias)
+      .slice(0, limit);
+  }
+
+  async getPrevisoes(tenantId: string): Promise<PrevisaoEstoque[]> {
+    return await db
+      .select()
+      .from(previsaoEstoque)
+      .where(eq(previsaoEstoque.tenantId, tenantId))
+      .orderBy(desc(previsaoEstoque.createdAt));
+  }
+
+  async createPrevisao(insertPrevisao: InsertPrevisaoEstoque): Promise<PrevisaoEstoque> {
+    const [previsao] = await db
+      .insert(previsaoEstoque)
+      .values(insertPrevisao)
+      .returning();
+    return previsao;
+  }
+
+  async updatePrevisaoStatus(id: string, tenantId: string, status: string): Promise<PrevisaoEstoque | undefined> {
+    const [updated] = await db
+      .update(previsaoEstoque)
+      .set({ status })
+      .where(and(eq(previsaoEstoque.id, id), eq(previsaoEstoque.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getAlertas(tenantId: string, limit: number): Promise<AlertaFrota[]> {
+    return await db
+      .select()
+      .from(alertasFrota)
+      .where(eq(alertasFrota.tenantId, tenantId))
+      .orderBy(desc(alertasFrota.createdAt))
+      .limit(limit);
+  }
+
+  async getAlertasNaoLidos(tenantId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(alertasFrota)
+      .where(and(eq(alertasFrota.tenantId, tenantId), eq(alertasFrota.lida, false)));
+    return Number(result[0]?.count || 0);
+  }
+
+  async createAlerta(insertAlerta: InsertAlertaFrota): Promise<AlertaFrota> {
+    const [alerta] = await db
+      .insert(alertasFrota)
+      .values(insertAlerta)
+      .returning();
+    return alerta;
+  }
+
+  async markAlertaLido(id: string, tenantId: string): Promise<AlertaFrota | undefined> {
+    const [updated] = await db
+      .update(alertasFrota)
+      .set({ lida: true })
+      .where(and(eq(alertasFrota.id, id), eq(alertasFrota.tenantId, tenantId)))
       .returning();
     return updated || undefined;
   }
