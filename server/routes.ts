@@ -18,6 +18,7 @@ import {
 } from "@shared/schema";
 import { iniciarRastreamento, generateSimulatedTrackingData } from "./n2n-service";
 import { fromZodError } from "zod-validation-error";
+import { calcularDPT, obterDPTRealtime, registrarInicioPreparoPedido, registrarFimPreparoPedido } from "./dpt_calculator";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -827,6 +828,12 @@ export async function registerRoutes(
         }
       }
 
+      const dptResult = await calcularDPT(tenantId, processedItems.map(i => ({
+        produtoId: i.produtoId || undefined,
+        nome: i.nome,
+        quantidade: i.quantidade,
+      })));
+
       const pedido = await storage.createPedido({
         tenantId,
         clienteId: cliente?.id || null,
@@ -836,6 +843,8 @@ export async function registerRoutes(
         observacoes: observacoes || (estoqueErrors.length > 0 ? `ALERTAS: ${estoqueErrors.join("; ")}` : null),
         enderecoEntrega: enderecoEntrega || clienteData.endereco || null,
         origem: "n8n",
+        tempoPreparoEstimado: dptResult.tempoPreparoEstimado,
+        tempoEntregaEstimado: dptResult.tempoEntregaEstimado,
       });
 
       broadcastNewOrder(tenantId, pedido);
@@ -864,6 +873,12 @@ export async function registerRoutes(
         totalCalculado: calculatedTotal,
         itensValidados: processedItems.filter(i => i.validado).length,
         alertasEstoque: estoqueErrors,
+        dpt: {
+          tempoPreparoEstimado: dptResult.tempoPreparoEstimado,
+          tempoEntregaEstimado: dptResult.tempoEntregaEstimado,
+          fatorFila: dptResult.fatorFila,
+          confianca: dptResult.confianca,
+        },
       });
     } catch (error) {
       console.error("Webhook pedido error:", error);
