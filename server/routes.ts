@@ -1618,5 +1618,75 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // DPT (DYNAMIC PREP TIME) ROUTES
+  // ============================================
+
+  app.get("/api/dpt/realtime", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const dptInfo = await obterDPTRealtime(tenantId);
+      res.json(dptInfo);
+    } catch (error) {
+      console.error("Error fetching DPT realtime:", error);
+      res.status(500).json({ error: "Failed to fetch DPT realtime data" });
+    }
+  });
+
+  app.post("/api/dpt/calcular", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { itens } = req.body;
+
+      if (!itens || !Array.isArray(itens)) {
+        return res.status(400).json({ error: "Itens array is required" });
+      }
+
+      const dptResult = await calcularDPT(tenantId, itens);
+      res.json(dptResult);
+    } catch (error) {
+      console.error("Error calculating DPT:", error);
+      res.status(500).json({ error: "Failed to calculate DPT" });
+    }
+  });
+
+  app.post("/api/dpt/iniciar-preparo/:pedidoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { pedidoId } = req.params;
+
+      await registrarInicioPreparoPedido(tenantId, pedidoId);
+      
+      const pedido = await storage.getPedido(pedidoId, tenantId);
+      if (pedido) {
+        broadcastOrderStatusChange(tenantId, pedido);
+      }
+
+      res.json({ success: true, message: "Preparo iniciado" });
+    } catch (error) {
+      console.error("Error starting prep:", error);
+      res.status(500).json({ error: "Failed to start prep" });
+    }
+  });
+
+  app.post("/api/dpt/finalizar-preparo/:pedidoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { pedidoId } = req.params;
+
+      await registrarFimPreparoPedido(tenantId, pedidoId);
+      
+      const pedido = await storage.getPedido(pedidoId, tenantId);
+      if (pedido) {
+        broadcastOrderStatusChange(tenantId, pedido);
+      }
+
+      res.json({ success: true, message: "Preparo finalizado" });
+    } catch (error) {
+      console.error("Error finishing prep:", error);
+      res.status(500).json({ error: "Failed to finish prep" });
+    }
+  });
+
   return httpServer;
 }
