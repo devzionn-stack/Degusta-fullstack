@@ -78,6 +78,11 @@ Core tables with UUID primary keys:
 - `produtos` - product/menu items scoped to tenant  
 - `estoque` - inventory tracking linked to products and tenants
 - `pedidos` - orders with JSONB items array, scoped to tenant
+- `motoboys` - delivery drivers with status and real-time location tracking
+- `transacoes` - financial transactions with payment methods and status
+- `feedbacks` - customer feedback with sentiment analysis (1-5 scale) and topic tags (JSONB array)
+- `previsao_estoque` - AI-generated purchase predictions with confidence levels and approval status
+- `alertas_frota` - global alerts system with severity levels (info/warn/critical) and read status
 
 **Multi-Tenancy Pattern**: All business tables (clientes, produtos, estoque, pedidos) include a `tenant_id` foreign key with cascade delete
 
