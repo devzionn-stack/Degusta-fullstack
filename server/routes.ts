@@ -145,6 +145,40 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/auth/switch-tenant", requireAuth, async (req, res) => {
+    try {
+      if (req.user?.role !== 'admin') {
+        return res.status(403).json({ error: "Apenas administradores podem trocar de franquia" });
+      }
+
+      const { tenantId } = req.body;
+      if (!tenantId) {
+        return res.status(400).json({ error: "ID da franquia é obrigatório" });
+      }
+
+      const tenant = await storage.getTenant(tenantId);
+      if (!tenant) {
+        return res.status(404).json({ error: "Franquia não encontrada" });
+      }
+
+      await storage.updateUser(req.user!.id, { tenantId });
+      
+      const updatedUser = await storage.getUser(req.user!.id);
+
+      res.json({
+        id: updatedUser!.id,
+        email: updatedUser!.email,
+        nome: updatedUser!.nome,
+        tenantId: updatedUser!.tenantId,
+        role: updatedUser!.role,
+        message: `Franquia alterada para ${tenant.nome}`,
+      });
+    } catch (error) {
+      console.error("Switch tenant error:", error);
+      res.status(500).json({ error: "Erro ao trocar de franquia" });
+    }
+  });
+
   // ============================================
   // TENANTS ROUTES (Protected - Tenant Scoped)
   // ============================================

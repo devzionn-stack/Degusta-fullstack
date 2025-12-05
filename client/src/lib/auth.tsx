@@ -13,9 +13,12 @@ interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isAdmin: boolean;
+  tenantId: string | null;
   login: (email: string, password: string) => Promise<AuthUser>;
   register: (email: string, password: string, nome: string, tenantId?: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
+  refetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -64,7 +67,7 @@ async function logoutUser(): Promise<void> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
-  const { data: user, isLoading } = useQuery({
+  const { data: user, isLoading, refetch } = useQuery({
     queryKey: ["auth-user"],
     queryFn: fetchCurrentUser,
     staleTime: 1000 * 60 * 5,
@@ -107,15 +110,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return logoutMutation.mutateAsync();
   };
 
+  const refetchUser = async () => {
+    await refetch();
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user: user ?? null,
         isLoading,
         isAuthenticated: !!user,
+        isAdmin: user?.role === "admin",
+        tenantId: user?.tenantId ?? null,
         login,
         register,
         logout,
+        refetchUser,
       }}
     >
       {children}
