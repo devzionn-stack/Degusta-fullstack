@@ -13,6 +13,7 @@ import Pedidos from "@/pages/Pedidos";
 import PedidoDetails from "@/pages/PedidoDetails";
 import Logistica from "@/pages/Logistica";
 import Financeiro from "@/pages/Financeiro";
+import Inteligencia from "@/pages/Inteligencia";
 import Configuracoes from "@/pages/Configuracoes";
 import Rastreio from "@/pages/Rastreio";
 import NotFound from "@/pages/not-found";
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/pedidos/:id" component={PedidoDetails} />
       <Route path="/dashboard/logistica" component={Logistica} />
       <Route path="/dashboard/financeiro" component={Financeiro} />
+      <Route path="/dashboard/inteligencia" component={Inteligencia} />
       <Route path="/dashboard/configuracoes" component={Configuracoes} />
       <Route path="/cozinha" component={Cozinha} />
       <Route path="/rastreio/:pedidoId" component={Rastreio} />

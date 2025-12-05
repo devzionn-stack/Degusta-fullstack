@@ -31,6 +31,7 @@ import {
   DollarSign,
   Building2,
   Truck,
+  Brain,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -53,6 +54,7 @@ const navItems = [
   { icon: Warehouse, label: "Estoque", path: "/dashboard/estoque" },
   { icon: Truck, label: "Logística", path: "/dashboard/logistica" },
   { icon: DollarSign, label: "Financeiro", path: "/dashboard/financeiro" },
+  { icon: Brain, label: "Inteligência", path: "/dashboard/inteligencia" },
   { icon: Settings, label: "Configurações", path: "/dashboard/configuracoes" },
 ];
 
