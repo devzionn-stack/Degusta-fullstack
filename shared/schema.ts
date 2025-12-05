@@ -96,6 +96,20 @@ export const logsN8n = pgTable("logs_n8n", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const transacoes = pgTable("transacoes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  pedidoId: varchar("pedido_id").references(() => pedidos.id, { onDelete: "set null" }),
+  tipo: text("tipo").notNull(),
+  valor: decimal("valor", { precision: 10, scale: 2 }).notNull(),
+  data: timestamp("data").defaultNow().notNull(),
+  status: text("status").notNull().default('pendente'),
+  descricao: text("descricao"),
+  metodoPagamento: text("metodo_pagamento"),
+  referenciaPagamento: text("referencia_pagamento"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertTenantSchema = createInsertSchema(tenants).omit({
   id: true,
   createdAt: true,
@@ -150,6 +164,22 @@ export const insertLogN8nSchema = createInsertSchema(logsN8n).omit({
   createdAt: true,
 });
 
+export const insertTransacaoSchema = createInsertSchema(transacoes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const tipoTransacaoEnum = z.enum(["receita", "despesa"]);
+export const statusTransacaoEnum = z.enum(["pendente", "confirmado", "cancelado"]);
+
+export const webhookPagamentoSchema = z.object({
+  pedidoId: z.string(),
+  status: z.enum(["aprovado", "recusado", "pendente"]),
+  metodoPagamento: z.enum(["pix", "boleto", "cartao", "dinheiro"]),
+  referenciaPagamento: z.string().optional(),
+  valor: z.number().min(0),
+});
+
 export const webhookPedidoSchema = z.object({
   cliente: z.object({
     nome: z.string(),
@@ -197,3 +227,6 @@ export type InsertPedido = z.infer<typeof insertPedidoSchema>;
 
 export type LogN8n = typeof logsN8n.$inferSelect;
 export type InsertLogN8n = z.infer<typeof insertLogN8nSchema>;
+
+export type Transacao = typeof transacoes.$inferSelect;
+export type InsertTransacao = z.infer<typeof insertTransacaoSchema>;
