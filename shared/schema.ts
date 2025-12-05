@@ -61,6 +61,9 @@ export const motoboys = pgTable("motoboys", {
   placa: text("placa"),
   veiculoTipo: text("veiculo_tipo").default('moto'),
   status: text("status").notNull().default('disponivel'),
+  lat: decimal("lat", { precision: 10, scale: 7 }),
+  lng: decimal("lng", { precision: 10, scale: 7 }),
+  lastLocationUpdate: timestamp("last_location_update"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
