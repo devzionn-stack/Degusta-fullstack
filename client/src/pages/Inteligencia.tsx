@@ -44,8 +44,15 @@ import {
   Frown,
   Plus,
   RefreshCw,
-  BarChart3
+  BarChart3,
+  Package,
+  CheckCircle,
+  XCircle,
+  Clock,
+  ShoppingCart
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import {
   PieChart,
@@ -80,6 +87,19 @@ interface SentimentSummary {
 interface TopicoCritico {
   topico: string;
   ocorrencias: number;
+}
+
+interface PrevisaoEstoque {
+  id: string;
+  tenantId: string;
+  ingrediente: string;
+  unidade: string;
+  quantidadeAtual: number;
+  quantidadeSugerida: number;
+  horizonteDias: number;
+  confianca: string | null;
+  status: string;
+  createdAt: string;
 }
 
 const SENTIMENT_COLORS = {
@@ -124,6 +144,35 @@ export default function Inteligencia() {
       const res = await fetch("/api/inteligencia/topicos-criticos?limit=6", { credentials: "include" });
       if (!res.ok) throw new Error("Erro ao carregar tópicos críticos");
       return res.json();
+    },
+  });
+
+  const { data: previsoes = [], isLoading: loadingPrevisoes } = useQuery<PrevisaoEstoque[]>({
+    queryKey: ["estoque", "previsoes"],
+    queryFn: async () => {
+      const res = await fetch("/api/estoque/previsoes", { credentials: "include" });
+      if (!res.ok) throw new Error("Erro ao carregar previsões");
+      return res.json();
+    },
+  });
+
+  const updatePrevisaoMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const res = await fetch(`/api/estoque/previsoes/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error("Erro ao atualizar previsão");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["estoque", "previsoes"] });
+      toast({ title: "Previsão atualizada!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar previsão", variant: "destructive" });
     },
   });
 
@@ -185,6 +234,29 @@ export default function Inteligencia() {
     return "bg-red-100 text-red-800";
   };
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "aprovada":
+        return <Badge className="bg-green-100 text-green-800"><CheckCircle className="h-3 w-3 mr-1" />Aprovada</Badge>;
+      case "rejeitada":
+        return <Badge className="bg-red-100 text-red-800"><XCircle className="h-3 w-3 mr-1" />Rejeitada</Badge>;
+      case "executada":
+        return <Badge className="bg-blue-100 text-blue-800"><ShoppingCart className="h-3 w-3 mr-1" />Executada</Badge>;
+      default:
+        return <Badge className="bg-amber-100 text-amber-800"><Clock className="h-3 w-3 mr-1" />Pendente</Badge>;
+    }
+  };
+
+  const getConfiancaColor = (confianca: number) => {
+    if (confianca >= 0.8) return "bg-green-500";
+    if (confianca >= 0.6) return "bg-amber-500";
+    return "bg-red-500";
+  };
+
+  const previsoesPendentes = previsoes.filter(p => p.status === "pendente");
+  const previsoesAprovadas = previsoes.filter(p => p.status === "aprovada" || p.status === "executada");
+  const previsoesRejeitadas = previsoes.filter(p => p.status === "rejeitada");
+
   const sentimentDistribution = feedbacks.reduce(
     (acc, fb) => {
       if (fb.sentimento >= 4) acc.positivo++;
@@ -220,9 +292,25 @@ export default function Inteligencia() {
               Inteligência de Negócio
             </h1>
             <p className="text-gray-500 mt-1">
-              Análise de feedbacks e insights sobre clientes
+              Análise de feedbacks, previsão de compras e insights com IA
             </p>
           </div>
+        </div>
+
+        <Tabs defaultValue="feedbacks" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="feedbacks" data-testid="tab-feedbacks">
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Análise de Sentimento
+            </TabsTrigger>
+            <TabsTrigger value="previsoes" data-testid="tab-previsoes">
+              <Package className="h-4 w-4 mr-2" />
+              Previsão de Compras
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="feedbacks" className="space-y-6 mt-6">
+          <div className="flex justify-end">
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button data-testid="button-add-feedback">
@@ -297,7 +385,7 @@ export default function Inteligencia() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
+          </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
@@ -489,6 +577,162 @@ export default function Inteligencia() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="previsoes" className="space-y-6 mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Previsões Pendentes</CardTitle>
+                  <Clock className="h-4 w-4 text-amber-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-amber-600" data-testid="text-previsoes-pendentes">
+                    {previsoesPendentes.length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Aguardando aprovação</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Aprovadas</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-600" data-testid="text-previsoes-aprovadas">
+                    {previsoesAprovadas.length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Pedidos confirmados</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Rejeitadas</CardTitle>
+                  <XCircle className="h-4 w-4 text-red-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-600" data-testid="text-previsoes-rejeitadas">
+                    {previsoesRejeitadas.length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Não aprovadas</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Previsões</CardTitle>
+                  <Package className="h-4 w-4 text-purple-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" data-testid="text-total-previsoes">
+                    {previsoes.length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Geradas pela IA</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5" />
+                  Previsões de Compras - IA
+                </CardTitle>
+                <CardDescription>
+                  Sugestões de reposição de estoque geradas automaticamente por inteligência artificial
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingPrevisoes ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
+                  </div>
+                ) : previsoes.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Ingrediente</TableHead>
+                        <TableHead>Qtd. Atual</TableHead>
+                        <TableHead>Qtd. Sugerida</TableHead>
+                        <TableHead>Horizonte</TableHead>
+                        <TableHead>Confiança</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {previsoes.map((previsao) => {
+                        const confianca = parseFloat(previsao.confianca || "0");
+                        return (
+                          <TableRow key={previsao.id} data-testid={`row-previsao-${previsao.id}`}>
+                            <TableCell className="whitespace-nowrap">
+                              {format(new Date(previsao.createdAt), "dd/MM/yyyy", { locale: ptBR })}
+                            </TableCell>
+                            <TableCell className="font-medium">{previsao.ingrediente}</TableCell>
+                            <TableCell>
+                              {previsao.quantidadeAtual} {previsao.unidade}
+                            </TableCell>
+                            <TableCell className="font-semibold text-primary">
+                              {previsao.quantidadeSugerida} {previsao.unidade}
+                            </TableCell>
+                            <TableCell>{previsao.horizonteDias} dias</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Progress 
+                                  value={confianca * 100} 
+                                  className="w-16 h-2"
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                  {(confianca * 100).toFixed(0)}%
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{getStatusBadge(previsao.status)}</TableCell>
+                            <TableCell className="text-right">
+                              {previsao.status === "pendente" && (
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-green-600 hover:text-green-700"
+                                    onClick={() => updatePrevisaoMutation.mutate({ id: previsao.id, status: "aprovada" })}
+                                    disabled={updatePrevisaoMutation.isPending}
+                                    data-testid={`button-aprovar-${previsao.id}`}
+                                  >
+                                    <CheckCircle className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-red-600 hover:text-red-700"
+                                    onClick={() => updatePrevisaoMutation.mutate({ id: previsao.id, status: "rejeitada" })}
+                                    disabled={updatePrevisaoMutation.isPending}
+                                    data-testid={`button-rejeitar-${previsao.id}`}
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Nenhuma previsão de compra gerada ainda.</p>
+                    <p className="text-sm">Integre com N8N para receber previsões automáticas de reposição.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );
