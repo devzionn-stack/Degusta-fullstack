@@ -938,6 +938,165 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/data/vendas_historico", validateN8nWebhook, async (req, res) => {
+    try {
+      const tenantId = req.webhookTenant!.id;
+      const { dataInicio, dataFim, limite } = req.query;
+
+      const pedidos = await storage.getPedidos(tenantId);
+      
+      let filteredPedidos = pedidos.filter(p => 
+        p.status === "entregue" || p.status === "finalizado"
+      );
+
+      if (dataInicio) {
+        const inicio = new Date(dataInicio as string);
+        filteredPedidos = filteredPedidos.filter(p => new Date(p.createdAt) >= inicio);
+      }
+
+      if (dataFim) {
+        const fim = new Date(dataFim as string);
+        filteredPedidos = filteredPedidos.filter(p => new Date(p.createdAt) <= fim);
+      }
+
+      if (limite) {
+        filteredPedidos = filteredPedidos.slice(0, parseInt(limite as string));
+      }
+
+      const vendasHistorico = filteredPedidos.map(pedido => {
+        const itens = Array.isArray(pedido.itens) ? pedido.itens : [];
+        return itens.map((item: any) => ({
+          pedidoId: pedido.id,
+          data: pedido.createdAt,
+          produtoId: item.produtoId || null,
+          produtoNome: item.nome || item.produtoNome,
+          quantidade: item.quantidade,
+          precoUnitario: item.precoUnitario,
+          subtotal: item.subtotal || (item.quantidade * item.precoUnitario),
+        }));
+      }).flat();
+
+      await storage.createLogN8n({
+        tenantId,
+        tipo: "vendas_historico_extraido",
+        endpoint: "/api/data/vendas_historico",
+        payload: { dataInicio, dataFim, limite },
+        resposta: { totalRegistros: vendasHistorico.length },
+        status: "sucesso",
+        erro: null,
+      });
+
+      res.json({
+        success: true,
+        totalRegistros: vendasHistorico.length,
+        dados: vendasHistorico,
+      });
+    } catch (error) {
+      console.error("Error fetching vendas historico:", error);
+      res.status(500).json({ error: "Erro ao buscar histórico de vendas" });
+    }
+  });
+
+  app.post("/api/webhook/n8n/previsao_estoque", validateN8nWebhook, async (req, res) => {
+    try {
+      const tenantId = req.webhookTenant!.id;
+      const { previsoes } = req.body;
+
+      if (!Array.isArray(previsoes)) {
+        return res.status(400).json({ error: "previsoes deve ser um array" });
+      }
+
+      const criadas = [];
+      for (const p of previsoes) {
+        const previsao = await storage.createPrevisao({
+          tenantId,
+          ingrediente: p.ingrediente || p.produtoNome,
+          unidade: p.unidade || "un",
+          quantidadeAtual: p.quantidadeAtual || 0,
+          quantidadeSugerida: p.quantidadeSugerida || 0,
+          horizonteDias: p.horizonteDias || 7,
+          confianca: p.confianca?.toString() || "0.8",
+          status: "pendente",
+        });
+        criadas.push(previsao);
+      }
+
+      await storage.createLogN8n({
+        tenantId,
+        tipo: "previsao_estoque_recebida",
+        endpoint: "/api/webhook/n8n/previsao_estoque",
+        payload: req.body,
+        resposta: { totalCriadas: criadas.length },
+        status: "sucesso",
+        erro: null,
+      });
+
+      res.status(201).json({
+        success: true,
+        message: `${criadas.length} previsões de estoque registradas`,
+        previsoes: criadas,
+      });
+    } catch (error) {
+      console.error("Webhook previsao_estoque error:", error);
+      res.status(500).json({ error: "Erro ao processar previsão de estoque" });
+    }
+  });
+
+  app.post("/api/webhook/n8n/feedback_analisado", validateN8nWebhook, async (req, res) => {
+    try {
+      const tenantId = req.webhookTenant!.id;
+      const { pedidoId, clienteId, texto, sentimento, topicos, nota, comentario } = req.body;
+
+      if (sentimento === undefined) {
+        return res.status(400).json({ error: "sentimento é obrigatório" });
+      }
+
+      let sentimentoNumerico: number;
+      if (typeof sentimento === "string") {
+        switch (sentimento.toLowerCase()) {
+          case "positivo": sentimentoNumerico = 5; break;
+          case "neutro": sentimentoNumerico = 3; break;
+          case "negativo": sentimentoNumerico = 1; break;
+          default: sentimentoNumerico = parseFloat(sentimento) || 3;
+        }
+      } else {
+        sentimentoNumerico = sentimento;
+      }
+
+      const topicosArray = Array.isArray(topicos) ? topicos : 
+        (topicos ? [topicos] : []);
+
+      const feedback = await storage.createFeedback({
+        tenantId,
+        pedidoId: pedidoId || null,
+        clienteId: clienteId || null,
+        sentimento: sentimentoNumerico.toString(),
+        topicos: topicosArray,
+        comentario: comentario || texto || null,
+        nota: nota || null,
+      });
+
+      await storage.createLogN8n({
+        tenantId,
+        tipo: "feedback_analisado_recebido",
+        endpoint: "/api/webhook/n8n/feedback_analisado",
+        payload: req.body,
+        resposta: { feedbackId: feedback.id },
+        status: "sucesso",
+        erro: null,
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Feedback analisado registrado com sucesso",
+        feedbackId: feedback.id,
+      });
+    } catch (error) {
+      console.error("Webhook feedback_analisado error:", error);
+      res.status(500).json({ error: "Erro ao processar feedback analisado" });
+    }
+  });
+
   app.get("/api/logs/n8n", requireAuth, requireTenant, async (req, res) => {
     try {
       const tenantId = req.user!.tenantId!;
