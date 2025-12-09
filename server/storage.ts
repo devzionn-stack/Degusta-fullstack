@@ -56,8 +56,10 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
   
   getTenants(): Promise<Tenant[]>;
+  getAllTenants(): Promise<Tenant[]>;
   getTenant(id: string): Promise<Tenant | undefined>;
   getTenantByApiKey(apiKey: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
@@ -141,6 +143,10 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users);
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
@@ -159,6 +165,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTenants(): Promise<Tenant[]> {
+    return await db.select().from(tenants);
+  }
+
+  async getAllTenants(): Promise<Tenant[]> {
     return await db.select().from(tenants);
   }
 

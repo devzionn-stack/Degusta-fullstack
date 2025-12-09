@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { type Server } from "http";
 import { storage } from "./storage";
-import { hashPassword, comparePasswords, requireAuth, requireTenant, regenerateSession } from "./auth";
+import { hashPassword, comparePasswords, requireAuth, requireTenant, requireSuperAdmin, regenerateSession } from "./auth";
 import { validateN8nWebhook, generateApiKey } from "./webhook-security";
 import { sendToN8n, notifyN8nNewOrder } from "./n8n-requester";
 import { broadcastNewOrder, broadcastOrderStatusChange } from "./websocket";
@@ -1257,6 +1257,71 @@ export async function registerRoutes(
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Erro ao enviar para N8N" });
+    }
+  });
+
+  // ============================================
+  // SUPER ADMIN ROUTES
+  // ============================================
+
+  app.get("/api/superadmin/tenants", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenants = await storage.getAllTenants();
+      res.json(tenants);
+    } catch (error) {
+      console.error("Error fetching all tenants:", error);
+      res.status(500).json({ error: "Erro ao buscar franquias" });
+    }
+  });
+
+  app.get("/api/superadmin/stats", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenants = await storage.getAllTenants();
+      const allUsers = await storage.getAllUsers();
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      let totalPedidosHoje = 0;
+      let faturamentoTotal = 0;
+      
+      for (const tenant of tenants) {
+        const pedidos = await storage.getPedidos(tenant.id);
+        const pedidosHoje = pedidos.filter(p => {
+          const pedidoDate = new Date(p.createdAt);
+          pedidoDate.setHours(0, 0, 0, 0);
+          return pedidoDate.getTime() === today.getTime();
+        });
+        totalPedidosHoje += pedidosHoje.length;
+        faturamentoTotal += pedidosHoje.reduce((sum, p) => sum + parseFloat(p.total || "0"), 0);
+      }
+      
+      res.json({
+        totalTenants: tenants.length,
+        totalUsers: allUsers.length,
+        totalPedidosHoje,
+        faturamentoTotal,
+      });
+    } catch (error) {
+      console.error("Error fetching super admin stats:", error);
+      res.status(500).json({ error: "Erro ao buscar estatísticas" });
+    }
+  });
+
+  app.get("/api/superadmin/users", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users.map(u => ({
+        id: u.id,
+        email: u.email,
+        nome: u.nome,
+        role: u.role,
+        tenantId: u.tenantId,
+        createdAt: u.createdAt,
+      })));
+    } catch (error) {
+      console.error("Error fetching all users:", error);
+      res.status(500).json({ error: "Erro ao buscar usuários" });
     }
   });
 

@@ -17,6 +17,7 @@ import Inteligencia from "@/pages/Inteligencia";
 import Estoque from "@/pages/Estoque";
 import Configuracoes from "@/pages/Configuracoes";
 import Rastreio from "@/pages/Rastreio";
+import SuperAdminDashboard from "@/pages/SuperAdminDashboard";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/superadmin" component={SuperAdminDashboard} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/dashboard/pedidos" component={Pedidos} />
       <Route path="/pedidos/:id" component={PedidoDetails} />

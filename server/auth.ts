@@ -72,6 +72,26 @@ export function requireTenant(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+export function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Não autenticado" });
+  }
+  if (req.user.role !== "super_admin") {
+    return res.status(403).json({ error: "Acesso restrito a Super Admin" });
+  }
+  next();
+}
+
+export function requireTenantAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Não autenticado" });
+  }
+  if (req.user.role !== "tenant_admin" && req.user.role !== "super_admin") {
+    return res.status(403).json({ error: "Acesso restrito a administradores" });
+  }
+  next();
+}
+
 export function regenerateSession(req: Request): Promise<void> {
   return new Promise((resolve, reject) => {
     const userId = req.session.userId;
