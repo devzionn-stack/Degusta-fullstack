@@ -1325,6 +1325,199 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/superadmin/dashboard", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenants = await storage.getAllTenants();
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      let faturamentoTotal = 0;
+      let totalPedidos = 0;
+      let totalTempoEntrega = 0;
+      let pedidosEntregues = 0;
+      
+      for (const tenant of tenants) {
+        const pedidos = await storage.getPedidos(tenant.id);
+        const pedidos30dias = pedidos.filter(p => new Date(p.createdAt) >= thirtyDaysAgo);
+        
+        totalPedidos += pedidos30dias.length;
+        faturamentoTotal += pedidos30dias.reduce((sum, p) => sum + parseFloat(p.total || "0"), 0);
+        
+        const entregues = pedidos30dias.filter(p => 
+          p.status === "entregue" && p.trackingStartedAt && p.updatedAt
+        );
+        entregues.forEach(p => {
+          const inicio = new Date(p.trackingStartedAt!).getTime();
+          const fim = new Date(p.updatedAt).getTime();
+          totalTempoEntrega += (fim - inicio) / 60000;
+          pedidosEntregues++;
+        });
+      }
+      
+      const ticketMedio = totalPedidos > 0 ? faturamentoTotal / totalPedidos : 0;
+      const tempoMedioEntrega = pedidosEntregues > 0 ? Math.round(totalTempoEntrega / pedidosEntregues) : 0;
+      
+      res.json({
+        faturamentoTotal,
+        totalPedidos,
+        ticketMedio,
+        tempoMedioEntrega,
+        totalFranquias: tenants.length,
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      res.status(500).json({ error: "Erro ao buscar dados do dashboard" });
+    }
+  });
+
+  app.get("/api/superadmin/revenue-comparison", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenants = await storage.getAllTenants();
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const dateLabels: string[] = [];
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(date.getDate() - i);
+        dateLabels.push(date.toISOString().split('T')[0]);
+      }
+      
+      const franchiseData: { tenantId: string; nome: string; data: number[] }[] = [];
+      
+      for (const tenant of tenants) {
+        const pedidos = await storage.getPedidos(tenant.id);
+        const dailyRevenue: Record<string, number> = {};
+        
+        dateLabels.forEach(date => { dailyRevenue[date] = 0; });
+        
+        pedidos.forEach(p => {
+          const pedidoDate = new Date(p.createdAt).toISOString().split('T')[0];
+          if (dailyRevenue[pedidoDate] !== undefined) {
+            dailyRevenue[pedidoDate] += parseFloat(p.total || "0");
+          }
+        });
+        
+        franchiseData.push({
+          tenantId: tenant.id,
+          nome: tenant.nome,
+          data: dateLabels.map(date => dailyRevenue[date]),
+        });
+      }
+      
+      res.json({ labels: dateLabels, franchises: franchiseData });
+    } catch (error) {
+      console.error("Error fetching revenue comparison:", error);
+      res.status(500).json({ error: "Erro ao buscar comparativo de faturamento" });
+    }
+  });
+
+  app.get("/api/superadmin/financial-kpis", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenants = await storage.getAllTenants();
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const financialData = await Promise.all(tenants.map(async (tenant) => {
+        const pedidos = await storage.getPedidos(tenant.id);
+        const pedidos30dias = pedidos.filter(p => new Date(p.createdAt) >= thirtyDaysAgo);
+        
+        const faturamento = pedidos30dias.reduce((sum, p) => sum + parseFloat(p.total || "0"), 0);
+        const totalPedidos = pedidos30dias.length;
+        const ticketMedio = totalPedidos > 0 ? faturamento / totalPedidos : 0;
+        
+        const cmvEstimado = faturamento * 0.35;
+        const margemBruta = faturamento > 0 ? ((faturamento - cmvEstimado) / faturamento) * 100 : 0;
+        
+        return {
+          tenantId: tenant.id,
+          nome: tenant.nome,
+          faturamento,
+          totalPedidos,
+          ticketMedio,
+          cmv: cmvEstimado,
+          margemBruta,
+        };
+      }));
+      
+      res.json(financialData);
+    } catch (error) {
+      console.error("Error fetching financial KPIs:", error);
+      res.status(500).json({ error: "Erro ao buscar KPIs financeiros" });
+    }
+  });
+
+  app.get("/api/superadmin/logistics", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenants = await storage.getAllTenants();
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      let totalPedidos = 0;
+      let pedidosAtrasados = 0;
+      let totalTempoEntrega = 0;
+      let pedidosEntregues = 0;
+      let motoboysAtivos = 0;
+      const heatmapData: { lat: number; lng: number; intensity: number }[] = [];
+      
+      for (const tenant of tenants) {
+        const pedidos = await storage.getPedidos(tenant.id);
+        const motoboys = await storage.getMotoboys(tenant.id);
+        
+        motoboysAtivos += motoboys.filter(m => m.status === "disponivel" || m.status === "em_entrega").length;
+        
+        const pedidos30dias = pedidos.filter(p => new Date(p.createdAt) >= thirtyDaysAgo);
+        totalPedidos += pedidos30dias.length;
+        
+        pedidos30dias.forEach(p => {
+          if (p.status === "entregue" && p.trackingStartedAt && p.updatedAt) {
+            const inicio = new Date(p.trackingStartedAt).getTime();
+            const fim = new Date(p.updatedAt).getTime();
+            const tempoMin = (fim - inicio) / 60000;
+            totalTempoEntrega += tempoMin;
+            pedidosEntregues++;
+            
+            if (tempoMin > 45) pedidosAtrasados++;
+          }
+          
+          if (p.enderecoLat && p.enderecoLng) {
+            const existing = heatmapData.find(h => 
+              Math.abs(h.lat - parseFloat(p.enderecoLat!)) < 0.01 && 
+              Math.abs(h.lng - parseFloat(p.enderecoLng!)) < 0.01
+            );
+            if (existing) {
+              existing.intensity++;
+            } else {
+              heatmapData.push({
+                lat: parseFloat(p.enderecoLat),
+                lng: parseFloat(p.enderecoLng),
+                intensity: 1,
+              });
+            }
+          }
+        });
+      }
+      
+      const taxaAtraso = pedidosEntregues > 0 ? (pedidosAtrasados / pedidosEntregues) * 100 : 0;
+      const tempoMedioEntrega = pedidosEntregues > 0 ? Math.round(totalTempoEntrega / pedidosEntregues) : 0;
+      
+      res.json({
+        taxaAtrasoGlobal: taxaAtraso,
+        tempoMedioEntrega,
+        motoboysAtivos,
+        totalPedidos,
+        heatmapData,
+      });
+    } catch (error) {
+      console.error("Error fetching logistics data:", error);
+      res.status(500).json({ error: "Erro ao buscar dados logísticos" });
+    }
+  });
+
   // ============================================
   // LOGISTICS ROUTES
   // ============================================
