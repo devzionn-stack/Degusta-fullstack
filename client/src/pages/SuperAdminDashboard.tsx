@@ -24,7 +24,8 @@ import {
   LogOut,
   BarChart3,
   Truck,
-  ChevronRight
+  ChevronRight,
+  FileText
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -180,7 +181,7 @@ export default function SuperAdminDashboard() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <Link href="/super-admin/dashboard">
             <Card className="cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-l-blue-500">
               <CardHeader>
@@ -211,6 +212,63 @@ export default function SuperAdminDashboard() {
                     <div>
                       <CardTitle className="text-lg">Controle Logístico Global</CardTitle>
                       <CardDescription>Mapa de calor e KPIs de entregas</CardDescription>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-gray-400" />
+                </div>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/super-admin/franquias">
+            <Card className="cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-l-orange-500">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-orange-100 rounded-lg">
+                      <Building2 className="h-6 w-6 text-orange-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">Administração de Franquias</CardTitle>
+                      <CardDescription>Gerenciar franquias e criar novas</CardDescription>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-gray-400" />
+                </div>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/super-admin/usuarios">
+            <Card className="cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-l-purple-500">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <Users className="h-6 w-6 text-purple-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">Administração de Usuários</CardTitle>
+                      <CardDescription>Gerenciar usuários de todas as franquias</CardDescription>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-gray-400" />
+                </div>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/super-admin/logs">
+            <Card className="cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-l-gray-500">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <FileText className="h-6 w-6 text-gray-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">Logs do Sistema</CardTitle>
+                      <CardDescription>Webhooks, alertas e auditoria</CardDescription>
                     </div>
                   </div>
                   <ChevronRight className="h-5 w-5 text-gray-400" />
