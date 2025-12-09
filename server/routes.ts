@@ -19,6 +19,15 @@ import {
 import { iniciarRastreamento, generateSimulatedTrackingData } from "./n2n-service";
 import { fromZodError } from "zod-validation-error";
 import { calcularDPT, obterDPTRealtime, registrarInicioPreparoPedido, registrarFimPreparoPedido } from "./dpt_calculator";
+import {
+  geocodificarEndereco,
+  calcularRota,
+  calcularETA,
+  obterMotoboyPorToken,
+  atualizarLocalizacaoMotoboy,
+  gerarTokenMotoboy,
+} from "./geo_service";
+import { despacharPedido, finalizarEntrega, selecionarMotoboyIdeal } from "./despacho";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -1685,6 +1694,177 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error finishing prep:", error);
       res.status(500).json({ error: "Failed to finish prep" });
+    }
+  });
+
+  // ============================================
+  // GEO FLEET MANAGEMENT ROUTES
+  // ============================================
+
+  app.post("/api/motoboy/localizacao", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "Token de acesso obrigatório" });
+      }
+
+      const token = authHeader.substring(7);
+      const motoboy = await obterMotoboyPorToken(token);
+
+      if (!motoboy) {
+        return res.status(401).json({ error: "Token inválido" });
+      }
+
+      const { lat, lng } = req.body;
+      if (lat === undefined || lng === undefined) {
+        return res.status(400).json({ error: "lat e lng são obrigatórios" });
+      }
+
+      await atualizarLocalizacaoMotoboy(motoboy.id, motoboy.tenantId, lat, lng);
+
+      res.json({ success: true, message: "Localização atualizada" });
+    } catch (error) {
+      console.error("Error updating motoboy location:", error);
+      res.status(500).json({ error: "Falha ao atualizar localização" });
+    }
+  });
+
+  app.post("/api/motoboys/:id/gerar-token", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const motoboyId = req.params.id;
+
+      const motoboy = await storage.getMotoboy(motoboyId, tenantId);
+      if (!motoboy) {
+        return res.status(404).json({ error: "Motoboy não encontrado" });
+      }
+
+      const token = await gerarTokenMotoboy(motoboyId);
+
+      res.json({ success: true, token });
+    } catch (error) {
+      console.error("Error generating motoboy token:", error);
+      res.status(500).json({ error: "Falha ao gerar token" });
+    }
+  });
+
+  app.post("/api/geo/geocodificar", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const { endereco } = req.body;
+      if (!endereco) {
+        return res.status(400).json({ error: "Endereço é obrigatório" });
+      }
+
+      const coordenadas = await geocodificarEndereco(endereco);
+      if (!coordenadas) {
+        return res.status(404).json({ error: "Endereço não encontrado" });
+      }
+
+      res.json(coordenadas);
+    } catch (error) {
+      console.error("Error geocoding address:", error);
+      res.status(500).json({ error: "Falha ao geocodificar" });
+    }
+  });
+
+  app.post("/api/geo/rota", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const { origem, destino } = req.body;
+      if (!origem || !destino || !origem.lat || !origem.lng || !destino.lat || !destino.lng) {
+        return res.status(400).json({ error: "Origem e destino com lat/lng são obrigatórios" });
+      }
+
+      const rota = await calcularRota(origem, destino);
+      if (!rota) {
+        return res.status(404).json({ error: "Não foi possível calcular a rota" });
+      }
+
+      res.json(rota);
+    } catch (error) {
+      console.error("Error calculating route:", error);
+      res.status(500).json({ error: "Falha ao calcular rota" });
+    }
+  });
+
+  app.post("/api/geo/eta", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const { motoboyLat, motoboyLng, destinoLat, destinoLng } = req.body;
+      if (motoboyLat === undefined || motoboyLng === undefined || 
+          destinoLat === undefined || destinoLng === undefined) {
+        return res.status(400).json({ error: "Coordenadas do motoboy e destino são obrigatórias" });
+      }
+
+      const eta = await calcularETA(motoboyLat, motoboyLng, destinoLat, destinoLng);
+
+      res.json(eta);
+    } catch (error) {
+      console.error("Error calculating ETA:", error);
+      res.status(500).json({ error: "Falha ao calcular ETA" });
+    }
+  });
+
+  app.post("/api/despacho/selecionar-motoboy", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { destinoLat, destinoLng } = req.body;
+
+      const destino = destinoLat && destinoLng ? { lat: destinoLat, lng: destinoLng } : undefined;
+      const motoboyIdeal = await selecionarMotoboyIdeal(tenantId, destino);
+
+      if (!motoboyIdeal) {
+        return res.status(404).json({ error: "Nenhum motoboy disponível" });
+      }
+
+      res.json(motoboyIdeal);
+    } catch (error) {
+      console.error("Error selecting motoboy:", error);
+      res.status(500).json({ error: "Falha ao selecionar motoboy" });
+    }
+  });
+
+  app.post("/api/despacho/enviar/:pedidoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { pedidoId } = req.params;
+
+      const resultado = await despacharPedido(pedidoId, tenantId);
+
+      if (!resultado.sucesso) {
+        return res.status(400).json({ error: resultado.mensagem });
+      }
+
+      const pedido = await storage.getPedido(pedidoId, tenantId);
+      if (pedido) {
+        broadcastOrderStatusChange(tenantId, pedido);
+      }
+
+      res.json(resultado);
+    } catch (error) {
+      console.error("Error dispatching order:", error);
+      res.status(500).json({ error: "Falha ao despachar pedido" });
+    }
+  });
+
+  app.post("/api/despacho/finalizar/:pedidoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { pedidoId } = req.params;
+
+      const resultado = await finalizarEntrega(pedidoId, tenantId);
+
+      if (!resultado.sucesso) {
+        return res.status(400).json({ error: resultado.mensagem });
+      }
+
+      const pedido = await storage.getPedido(pedidoId, tenantId);
+      if (pedido) {
+        broadcastOrderStatusChange(tenantId, pedido);
+      }
+
+      res.json(resultado);
+    } catch (error) {
+      console.error("Error completing delivery:", error);
+      res.status(500).json({ error: "Falha ao finalizar entrega" });
     }
   });
 
