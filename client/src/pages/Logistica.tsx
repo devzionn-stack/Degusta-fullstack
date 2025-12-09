@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import KPICard from "@/components/KPICard";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -21,8 +21,6 @@ import {
   CheckCircle,
   XCircle
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-
 const DEFAULT_CENTER: [number, number] = [-23.5505, -46.6333];
 const DEFAULT_ZOOM = 13;
 
@@ -112,7 +110,6 @@ function MapUpdater({ center }: { center: [number, number] }) {
 }
 
 export default function Logistica() {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedMotoboy, setSelectedMotoboy] = useState<Motoboy | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>(DEFAULT_CENTER);
