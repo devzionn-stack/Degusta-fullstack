@@ -175,6 +175,19 @@ export const historicoPreparo = pgTable("historico_preparo", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const systemLogs = pgTable("system_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  tipo: text("tipo").notNull(),
+  acao: text("acao").notNull(),
+  entidade: text("entidade"),
+  entidadeId: varchar("entidade_id"),
+  detalhes: jsonb("detalhes").$type<Record<string, any>>(),
+  ip: text("ip"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertTenantSchema = createInsertSchema(tenants).omit({
   id: true,
   createdAt: true,
@@ -329,3 +342,15 @@ export type InsertAlertaFrota = z.infer<typeof insertAlertaFrotaSchema>;
 
 export type HistoricoPreparo = typeof historicoPreparo.$inferSelect;
 export type InsertHistoricoPreparo = z.infer<typeof insertHistoricoPreparoSchema>;
+
+export type SystemLog = typeof systemLogs.$inferSelect;
+export type InsertSystemLog = {
+  tenantId?: string | null;
+  userId?: string | null;
+  tipo: string;
+  acao: string;
+  entidade?: string | null;
+  entidadeId?: string | null;
+  detalhes?: Record<string, any> | null;
+  ip?: string | null;
+};

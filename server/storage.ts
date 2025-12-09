@@ -23,6 +23,8 @@ import {
   type InsertPrevisaoEstoque,
   type AlertaFrota,
   type InsertAlertaFrota,
+  type SystemLog,
+  type InsertSystemLog,
   users,
   tenants,
   clientes,
@@ -35,6 +37,7 @@ import {
   feedbacks,
   previsaoEstoque,
   alertasFrota,
+  systemLogs,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, inArray, sql } from "drizzle-orm";
@@ -130,6 +133,20 @@ export interface IStorage {
   getAlertasNaoLidos(tenantId: string): Promise<number>;
   createAlerta(alerta: InsertAlertaFrota): Promise<AlertaFrota>;
   markAlertaLido(id: string, tenantId: string): Promise<AlertaFrota | undefined>;
+
+  deleteTenant(id: string): Promise<boolean>;
+  deleteUser(id: string): Promise<boolean>;
+  getUsersFiltered(filters: { tenantId?: string; role?: string }): Promise<User[]>;
+  
+  getSystemLogs(filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date }, limit: number, offset: number): Promise<SystemLog[]>;
+  getSystemLogsCount(filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date }): Promise<number>;
+  createSystemLog(log: InsertSystemLog): Promise<SystemLog>;
+  
+  getAllLogsN8n(filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date }, limit: number, offset: number): Promise<LogN8n[]>;
+  getAllLogsN8nCount(filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date }): Promise<number>;
+  
+  getAllAlertas(filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date }, limit: number, offset: number): Promise<AlertaFrota[]>;
+  getAllAlertasCount(filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date }): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -704,6 +721,189 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(alertasFrota.id, id), eq(alertasFrota.tenantId, tenantId)))
       .returning();
     return updated || undefined;
+  }
+
+  async deleteTenant(id: string): Promise<boolean> {
+    const result = await db.delete(tenants).where(eq(tenants.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getUsersFiltered(filters: { tenantId?: string; role?: string }): Promise<User[]> {
+    const conditions = [];
+    if (filters.tenantId) {
+      conditions.push(eq(users.tenantId, filters.tenantId));
+    }
+    if (filters.role) {
+      conditions.push(eq(users.role, filters.role));
+    }
+    
+    if (conditions.length === 0) {
+      return db.select().from(users).orderBy(desc(users.createdAt));
+    }
+    
+    return db.select().from(users)
+      .where(and(...conditions))
+      .orderBy(desc(users.createdAt));
+  }
+
+  async getSystemLogs(
+    filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date },
+    limit: number,
+    offset: number
+  ): Promise<SystemLog[]> {
+    const conditions = [];
+    if (filters.tenantId) {
+      conditions.push(eq(systemLogs.tenantId, filters.tenantId));
+    }
+    if (filters.tipo) {
+      conditions.push(eq(systemLogs.tipo, filters.tipo));
+    }
+    if (filters.startDate) {
+      conditions.push(sql`${systemLogs.createdAt} >= ${filters.startDate}`);
+    }
+    if (filters.endDate) {
+      conditions.push(sql`${systemLogs.createdAt} <= ${filters.endDate}`);
+    }
+
+    const query = db.select().from(systemLogs);
+    if (conditions.length > 0) {
+      return query.where(and(...conditions)).orderBy(desc(systemLogs.createdAt)).limit(limit).offset(offset);
+    }
+    return query.orderBy(desc(systemLogs.createdAt)).limit(limit).offset(offset);
+  }
+
+  async getSystemLogsCount(filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date }): Promise<number> {
+    const conditions = [];
+    if (filters.tenantId) {
+      conditions.push(eq(systemLogs.tenantId, filters.tenantId));
+    }
+    if (filters.tipo) {
+      conditions.push(eq(systemLogs.tipo, filters.tipo));
+    }
+    if (filters.startDate) {
+      conditions.push(sql`${systemLogs.createdAt} >= ${filters.startDate}`);
+    }
+    if (filters.endDate) {
+      conditions.push(sql`${systemLogs.createdAt} <= ${filters.endDate}`);
+    }
+
+    const query = db.select({ count: sql<number>`COUNT(*)` }).from(systemLogs);
+    if (conditions.length > 0) {
+      const result = await query.where(and(...conditions));
+      return Number(result[0]?.count || 0);
+    }
+    const result = await query;
+    return Number(result[0]?.count || 0);
+  }
+
+  async createSystemLog(insertLog: InsertSystemLog): Promise<SystemLog> {
+    const [log] = await db.insert(systemLogs).values(insertLog).returning();
+    return log;
+  }
+
+  async getAllLogsN8n(
+    filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date },
+    limit: number,
+    offset: number
+  ): Promise<LogN8n[]> {
+    const conditions = [];
+    if (filters.tenantId) {
+      conditions.push(eq(logsN8n.tenantId, filters.tenantId));
+    }
+    if (filters.tipo) {
+      conditions.push(eq(logsN8n.tipo, filters.tipo));
+    }
+    if (filters.startDate) {
+      conditions.push(sql`${logsN8n.createdAt} >= ${filters.startDate}`);
+    }
+    if (filters.endDate) {
+      conditions.push(sql`${logsN8n.createdAt} <= ${filters.endDate}`);
+    }
+
+    const query = db.select().from(logsN8n);
+    if (conditions.length > 0) {
+      return query.where(and(...conditions)).orderBy(desc(logsN8n.createdAt)).limit(limit).offset(offset);
+    }
+    return query.orderBy(desc(logsN8n.createdAt)).limit(limit).offset(offset);
+  }
+
+  async getAllLogsN8nCount(filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date }): Promise<number> {
+    const conditions = [];
+    if (filters.tenantId) {
+      conditions.push(eq(logsN8n.tenantId, filters.tenantId));
+    }
+    if (filters.tipo) {
+      conditions.push(eq(logsN8n.tipo, filters.tipo));
+    }
+    if (filters.startDate) {
+      conditions.push(sql`${logsN8n.createdAt} >= ${filters.startDate}`);
+    }
+    if (filters.endDate) {
+      conditions.push(sql`${logsN8n.createdAt} <= ${filters.endDate}`);
+    }
+
+    const query = db.select({ count: sql<number>`COUNT(*)` }).from(logsN8n);
+    if (conditions.length > 0) {
+      const result = await query.where(and(...conditions));
+      return Number(result[0]?.count || 0);
+    }
+    const result = await query;
+    return Number(result[0]?.count || 0);
+  }
+
+  async getAllAlertas(
+    filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date },
+    limit: number,
+    offset: number
+  ): Promise<AlertaFrota[]> {
+    const conditions = [];
+    if (filters.tenantId) {
+      conditions.push(eq(alertasFrota.tenantId, filters.tenantId));
+    }
+    if (filters.tipo) {
+      conditions.push(eq(alertasFrota.tipo, filters.tipo));
+    }
+    if (filters.startDate) {
+      conditions.push(sql`${alertasFrota.createdAt} >= ${filters.startDate}`);
+    }
+    if (filters.endDate) {
+      conditions.push(sql`${alertasFrota.createdAt} <= ${filters.endDate}`);
+    }
+
+    const query = db.select().from(alertasFrota);
+    if (conditions.length > 0) {
+      return query.where(and(...conditions)).orderBy(desc(alertasFrota.createdAt)).limit(limit).offset(offset);
+    }
+    return query.orderBy(desc(alertasFrota.createdAt)).limit(limit).offset(offset);
+  }
+
+  async getAllAlertasCount(filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date }): Promise<number> {
+    const conditions = [];
+    if (filters.tenantId) {
+      conditions.push(eq(alertasFrota.tenantId, filters.tenantId));
+    }
+    if (filters.tipo) {
+      conditions.push(eq(alertasFrota.tipo, filters.tipo));
+    }
+    if (filters.startDate) {
+      conditions.push(sql`${alertasFrota.createdAt} >= ${filters.startDate}`);
+    }
+    if (filters.endDate) {
+      conditions.push(sql`${alertasFrota.createdAt} <= ${filters.endDate}`);
+    }
+
+    const query = db.select({ count: sql<number>`COUNT(*)` }).from(alertasFrota);
+    if (conditions.length > 0) {
+      const result = await query.where(and(...conditions));
+      return Number(result[0]?.count || 0);
+    }
+    const result = await query;
+    return Number(result[0]?.count || 0);
   }
 }
 

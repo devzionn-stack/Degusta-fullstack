@@ -1518,6 +1518,227 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/superadmin/tenants", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { nome, cnpj, endereco, telefone, adminEmail, adminPassword, adminNome } = req.body;
+      
+      if (!nome) {
+        return res.status(400).json({ error: "Nome da franquia é obrigatório" });
+      }
+      if (!adminEmail || !adminPassword || !adminNome) {
+        return res.status(400).json({ error: "Dados do administrador são obrigatórios" });
+      }
+
+      const existingUser = await storage.getUserByEmail(adminEmail);
+      if (existingUser) {
+        return res.status(400).json({ error: "Email do administrador já está em uso" });
+      }
+
+      const tenant = await storage.createTenant({ nome, status: "active" });
+
+      const hashedPassword = await hashPassword(adminPassword);
+      await storage.createUser({
+        email: adminEmail,
+        password: hashedPassword,
+        nome: adminNome,
+        role: "tenant_admin",
+        tenantId: tenant.id,
+      });
+
+      await storage.createSystemLog({
+        userId: req.user?.id,
+        tipo: "admin",
+        acao: "criar_franquia",
+        entidade: "tenant",
+        entidadeId: tenant.id,
+        detalhes: { nome, adminEmail },
+        ip: req.ip,
+      });
+
+      res.status(201).json(tenant);
+    } catch (error) {
+      console.error("Error creating tenant:", error);
+      res.status(500).json({ error: "Erro ao criar franquia" });
+    }
+  });
+
+  app.put("/api/superadmin/tenants/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { nome, status, n8nWebhookUrl, apiKeyN8n } = req.body;
+
+      const tenant = await storage.updateTenant(id, { nome, status, n8nWebhookUrl, apiKeyN8n });
+      if (!tenant) {
+        return res.status(404).json({ error: "Franquia não encontrada" });
+      }
+
+      await storage.createSystemLog({
+        userId: req.user?.id,
+        tipo: "admin",
+        acao: "atualizar_franquia",
+        entidade: "tenant",
+        entidadeId: id,
+        detalhes: { nome, status },
+        ip: req.ip,
+      });
+
+      res.json(tenant);
+    } catch (error) {
+      console.error("Error updating tenant:", error);
+      res.status(500).json({ error: "Erro ao atualizar franquia" });
+    }
+  });
+
+  app.delete("/api/superadmin/tenants/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const deleted = await storage.deleteTenant(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Franquia não encontrada" });
+      }
+
+      await storage.createSystemLog({
+        userId: req.user?.id,
+        tipo: "admin",
+        acao: "excluir_franquia",
+        entidade: "tenant",
+        entidadeId: id,
+        detalhes: {},
+        ip: req.ip,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting tenant:", error);
+      res.status(500).json({ error: "Erro ao excluir franquia" });
+    }
+  });
+
+  app.get("/api/superadmin/users/filtered", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { tenantId, role } = req.query;
+      const users = await storage.getUsersFiltered({
+        tenantId: tenantId as string | undefined,
+        role: role as string | undefined,
+      });
+      res.json(users.map(u => ({
+        id: u.id,
+        email: u.email,
+        nome: u.nome,
+        role: u.role,
+        tenantId: u.tenantId,
+        createdAt: u.createdAt,
+      })));
+    } catch (error) {
+      console.error("Error fetching filtered users:", error);
+      res.status(500).json({ error: "Erro ao buscar usuários" });
+    }
+  });
+
+  app.put("/api/superadmin/users/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { nome, email, role, tenantId } = req.body;
+
+      const user = await storage.updateUser(id, { nome, email, role, tenantId });
+      if (!user) {
+        return res.status(404).json({ error: "Usuário não encontrado" });
+      }
+
+      await storage.createSystemLog({
+        userId: req.user?.id,
+        tipo: "admin",
+        acao: "atualizar_usuario",
+        entidade: "user",
+        entidadeId: id,
+        detalhes: { nome, email, role },
+        ip: req.ip,
+      });
+
+      res.json({
+        id: user.id,
+        email: user.email,
+        nome: user.nome,
+        role: user.role,
+        tenantId: user.tenantId,
+        createdAt: user.createdAt,
+      });
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ error: "Erro ao atualizar usuário" });
+    }
+  });
+
+  app.delete("/api/superadmin/users/:id", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      if (id === req.user?.id) {
+        return res.status(400).json({ error: "Não é possível excluir a própria conta" });
+      }
+
+      const deleted = await storage.deleteUser(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Usuário não encontrado" });
+      }
+
+      await storage.createSystemLog({
+        userId: req.user?.id,
+        tipo: "admin",
+        acao: "excluir_usuario",
+        entidade: "user",
+        entidadeId: id,
+        detalhes: {},
+        ip: req.ip,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ error: "Erro ao excluir usuário" });
+    }
+  });
+
+  app.get("/api/superadmin/logs", requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+      const { tenantId, tipo, startDate, endDate, page = "1", limit = "20" } = req.query;
+      
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const offset = (pageNum - 1) * limitNum;
+
+      const filters = {
+        tenantId: tenantId as string | undefined,
+        tipo: tipo as string | undefined,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+      };
+
+      const [webhookLogs, webhookCount, alertas, alertasCount] = await Promise.all([
+        storage.getAllLogsN8n(filters, limitNum, offset),
+        storage.getAllLogsN8nCount(filters),
+        storage.getAllAlertas(filters, limitNum, offset),
+        storage.getAllAlertasCount(filters),
+      ]);
+
+      res.json({
+        webhookLogs,
+        alertas,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          totalWebhooks: webhookCount,
+          totalAlertas: alertasCount,
+          totalPages: Math.ceil(Math.max(webhookCount, alertasCount) / limitNum),
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching logs:", error);
+      res.status(500).json({ error: "Erro ao buscar logs" });
+    }
+  });
+
   // ============================================
   // LOGISTICS ROUTES
   // ============================================
