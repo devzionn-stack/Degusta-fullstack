@@ -65,6 +65,8 @@ export const motoboys = pgTable("motoboys", {
   lat: decimal("lat", { precision: 10, scale: 7 }),
   lng: decimal("lng", { precision: 10, scale: 7 }),
   lastLocationUpdate: timestamp("last_location_update"),
+  accessToken: text("access_token"),
+  pedidosAtivos: integer("pedidos_ativos").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -86,8 +88,14 @@ export const pedidos = pgTable("pedidos", {
   trackingStartedAt: timestamp("tracking_started_at"),
   tempoPreparoEstimado: integer("tempo_preparo_estimado"),
   tempoEntregaEstimado: integer("tempo_entrega_estimado"),
+  etaMinutos: integer("eta_minutos"),
+  etaCalculadoEm: timestamp("eta_calculado_em"),
+  rotaPolyline: text("rota_polyline"),
+  destinoLat: decimal("destino_lat", { precision: 10, scale: 7 }),
+  destinoLng: decimal("destino_lng", { precision: 10, scale: 7 }),
   inicioPreparoAt: timestamp("inicio_preparo_at"),
   prontoEntregaAt: timestamp("pronto_entrega_at"),
+  saiuEntregaAt: timestamp("saiu_entrega_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
