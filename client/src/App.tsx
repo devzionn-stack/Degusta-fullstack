@@ -18,6 +18,8 @@ import Estoque from "@/pages/Estoque";
 import Configuracoes from "@/pages/Configuracoes";
 import Rastreio from "@/pages/Rastreio";
 import SuperAdminDashboard from "@/pages/SuperAdminDashboard";
+import SuperAdminDashboardGlobal from "@/pages/SuperAdminDashboardGlobal";
+import SuperAdminLogistica from "@/pages/SuperAdminLogistica";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -27,6 +29,8 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/superadmin" component={SuperAdminDashboard} />
+      <Route path="/super-admin/dashboard" component={SuperAdminDashboardGlobal} />
+      <Route path="/super-admin/logistica" component={SuperAdminLogistica} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/dashboard/pedidos" component={Pedidos} />
       <Route path="/pedidos/:id" component={PedidoDetails} />

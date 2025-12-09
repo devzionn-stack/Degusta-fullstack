@@ -21,7 +21,10 @@ import {
   Store,
   RefreshCw,
   Settings,
-  LogOut
+  LogOut,
+  BarChart3,
+  Truck,
+  ChevronRight
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -175,6 +178,46 @@ export default function SuperAdminDashboard() {
               <p className="text-xs text-muted-foreground">Hoje em toda a rede</p>
             </CardContent>
           </Card>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Link href="/super-admin/dashboard">
+            <Card className="cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-l-blue-500">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <BarChart3 className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">Dashboard Global</CardTitle>
+                      <CardDescription>KPIs agregados e comparativo de faturamento</CardDescription>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-gray-400" />
+                </div>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/super-admin/logistica">
+            <Card className="cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-l-green-500">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <Truck className="h-6 w-6 text-green-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">Controle Logístico Global</CardTitle>
+                      <CardDescription>Mapa de calor e KPIs de entregas</CardDescription>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-gray-400" />
+                </div>
+              </CardHeader>
+            </Card>
+          </Link>
         </div>
 
         <Card>
