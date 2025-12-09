@@ -131,7 +131,7 @@ async function notificarMudancaETA(
       .where(eq(tenants.id, pedido.tenantId))
       .limit(1);
 
-    if (!tenant[0]?.n8nApiKey) {
+    if (!tenant[0]?.apiKeyN8n) {
       console.log(`[ETA Cron] Tenant ${pedido.tenantId} não possui chave N8N`);
       return;
     }

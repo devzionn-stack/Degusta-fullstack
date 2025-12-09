@@ -161,6 +161,39 @@ Core tables with UUID primary keys:
 
 **Status Coverage**: Includes 'recebido', 'em_preparo', 'pendente', 'confirmado' for complete order tracking
 
+### Geo Fleet Management System
+
+**Services**: 
+- `server/geo_service.ts` - Geocoding, routing, ETA calculation, geofencing
+- `server/despacho.ts` - Motoboy dispatch with optimal selection
+- `server/eta_cron.ts` - ETA recalculation cron job (every 5 minutes)
+
+**Key Features**:
+- Google Maps API integration (geocoding, directions, distance matrix) with fallback to Haversine
+- Motoboy selection based on distance + workload scoring
+- Token-based authentication for motoboy mobile app
+- Real-time ETA calculation with traffic awareness
+- Automatic geofencing alerts when motoboy deviates from route
+- N8N webhook integration for ETA change notifications (> 2 min threshold)
+
+**API Endpoints**:
+- `POST /api/motoboy/localizacao` - Public endpoint with Bearer token auth for motoboy app
+- `POST /api/motoboys/:id/gerar-token` - Generate access token for motoboy (protected)
+- `POST /api/geo/geocodificar` - Address to coordinates (protected)
+- `POST /api/geo/rota` - Calculate route between two points (protected)
+- `POST /api/geo/eta` - Calculate ETA between motoboy and destination (protected)
+- `POST /api/despacho/selecionar-motoboy` - Find optimal motoboy (protected)
+- `POST /api/despacho/enviar/:pedidoId` - Dispatch order to motoboy (protected)
+- `POST /api/despacho/finalizar/:pedidoId` - Complete delivery (protected)
+
+**ETA Cron Job**: Runs every 5 minutes to:
+- Recalculate ETA for all orders in transit
+- Detect motoboys off-route (geofencing) and create alerts
+- Notify N8N when ETA changes by more than 2 minutes
+
+**Environment Variables**:
+- `GOOGLE_MAPS_API_KEY` - Optional, enables real Google Maps API calls
+
 **Deployment Considerations**:
 - Environment variable `DATABASE_URL` required
 - Optional `SESSION_SECRET` for production
