@@ -199,3 +199,42 @@ Core tables with UUID primary keys:
 - Optional `SESSION_SECRET` for production
 - Build process separates client (Vite) and server (esbuild) builds
 - Static file serving from `dist/public` in production
+
+### Intelligent Stock and Cost Management System
+
+**Service**: `server/custo_lucro.ts` - Real-time cost tracking and profit analysis
+
+**Database Schema**:
+- `custo_mercado` - Historical market price tracking with supplier info and timestamps
+- `ingredientes.idExternoEstoque` - External ID for N8N integration
+- `estoque.ingredienteId` - Links stock entries to ingredients for cost calculations
+
+**Key Features**:
+- Real-time market price updates via authenticated N8N webhooks
+- Historical cost tracking for accurate profit analysis
+- Order-date-based cost calculations (not current prices)
+- Franchise, product, and ingredient profitability analytics
+
+**API Endpoints**:
+- `POST /api/custo/mercado` - Market price webhook (N8N authenticated with tenant validation)
+- `GET /api/custo/produto/:produtoId` - Product cost breakdown with recipes
+- `GET /api/lucro/franquia` - Franchise profit summary with KPIs
+- `GET /api/custos/produtos` - All products cost analysis
+- `GET /api/lucro/ingredientes` - Ingredient profitability with historical pricing
+- `GET /api/custo/historico/:ingredienteId` - Price history for an ingredient
+
+**Security Features**:
+- `validateN8nWebhook` middleware for webhook authentication
+- Tenant ownership validation before price updates
+- Cross-tenant data tampering prevention at database level
+
+**Historical Pricing Logic**:
+- `getCustoIngredienteNaData(ingredienteId, date)` - Gets price at specific date
+- Falls back to `ingrediente.custoUnitario` when no historical data exists
+- Ensures closed orders retain accurate costs even after price changes
+
+**Dashboard**: `client/src/pages/Custos.tsx`
+- Profit KPIs (revenue, costs, gross profit, margin)
+- Products tab with cost breakdown and margin analysis
+- Ingredients tab with usage and historical cost tracking
+- Summary tab with financial overview
