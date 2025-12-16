@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { CircularProgress } from "@/components/ui/circular-progress";
 import { 
   ChefHat, 
   Clock, 
@@ -291,6 +291,9 @@ export default function PedidoCardKDS({
     }
   };
 
+  const progressColor = isLate || producaoStatus?.urgencia === "vermelho" ? "danger" :
+    producaoStatus?.urgencia === "amarelo" ? "warning" : "default";
+
   return (
     <Card 
       className={`
@@ -300,20 +303,20 @@ export default function PedidoCardKDS({
       `}
       data-testid={`kds-card-${pedido.id}`}
     >
-      <CardHeader className={`pb-2 ${compact ? "p-3" : "p-4"}`}>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-mono text-sm font-bold text-primary truncate">
+      <CardHeader className={`pb-2 ${compact ? "p-4" : "p-5"}`}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="font-mono text-lg md:text-xl font-bold text-primary truncate">
               #{pedido.id.slice(0, 8)}
             </span>
             {pedido.origem === "n8n" && (
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+              <Badge variant="secondary" className="text-xs px-2 py-0.5 shrink-0">
                 N8N
               </Badge>
             )}
           </div>
-          <Badge className={`${config.color} shrink-0`}>
-            <StatusIcon className="w-3 h-3 mr-1" />
+          <Badge className={`${config.color} shrink-0 text-sm px-3 py-1`}>
+            <StatusIcon className="w-4 h-4 mr-1.5" />
             {config.label}
           </Badge>
         </div>
@@ -339,77 +342,74 @@ export default function PedidoCardKDS({
         </div>
 
         {pedido.status === "em_preparo" && (
-          <div className="mt-3 space-y-2">
-            {producaoStatus && (
-              <div className="flex items-center justify-between gap-2">
-                <div className={`
-                  flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold
-                  ${producaoStatus.urgencia === "vermelho" ? "bg-red-100 text-red-800 border border-red-300 animate-pulse" : ""}
-                  ${producaoStatus.urgencia === "amarelo" ? "bg-amber-100 text-amber-800 border border-amber-300" : ""}
-                  ${producaoStatus.urgencia === "verde" ? "bg-green-100 text-green-800 border border-green-300" : ""}
-                `}>
-                  <Clock className="w-3.5 h-3.5" />
-                  Loop: {producaoStatus.numeroLoop}min
+          <div className="mt-4">
+            <div className="flex items-center gap-4">
+              <CircularProgress 
+                value={Math.min(100, producaoStatus?.progresso ?? dptInfo?.progresso ?? progress)}
+                size={70}
+                strokeWidth={6}
+                color={progressColor}
+                label="preparo"
+              />
+              <div className="flex-1 space-y-2">
+                {producaoStatus && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className={`
+                      flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold
+                      ${producaoStatus.urgencia === "vermelho" ? "bg-red-100 text-red-800 border border-red-300 animate-pulse" : ""}
+                      ${producaoStatus.urgencia === "amarelo" ? "bg-amber-100 text-amber-800 border border-amber-300" : ""}
+                      ${producaoStatus.urgencia === "verde" ? "bg-green-100 text-green-800 border border-green-300" : ""}
+                    `}>
+                      <Clock className="w-4 h-4" />
+                      Loop: {producaoStatus.numeroLoop}min
+                    </div>
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-lg text-sm text-blue-700 dark:text-blue-300 font-medium border border-blue-200 dark:border-blue-700">
+                      <ChefHat className="w-4 h-4" />
+                      {producaoStatus.etapaAtual}
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {producaoStatus?.tempoDecorrido ? Math.floor(producaoStatus.tempoDecorrido / 60) : tempoDecorrido} min decorridos
+                  </span>
+                  {producaoStatus?.tempoRestante !== undefined && producaoStatus.tempoRestante < 0 ? (
+                    <span className="font-bold text-red-600 animate-pulse text-base">
+                      +{Math.abs(Math.floor(producaoStatus.tempoRestante / 60))}min ATRASADO
+                    </span>
+                  ) : (
+                    <span className={`font-semibold ${progressColor === "danger" ? 'text-red-600' : progressColor === "warning" ? 'text-amber-600' : 'text-foreground'}`}>
+                      {producaoStatus ? Math.floor(producaoStatus.tempoRestante / 60) : Math.max(0, dpt - tempoDecorrido)}min restantes
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-lg text-xs text-blue-700 font-medium border border-blue-200">
-                  <ChefHat className="w-3.5 h-3.5" />
-                  {producaoStatus.etapaAtual}
-                </div>
+                {producaoStatus?.proximaEtapa && (
+                  <div className="text-xs text-muted-foreground bg-muted/50 dark:bg-muted/20 py-1.5 px-2 rounded">
+                    Próxima: <span className="font-medium text-foreground">{producaoStatus.proximaEtapa}</span>
+                  </div>
+                )}
               </div>
-            )}
-            <div className="flex items-center justify-between text-xs">
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <TrendingUp className="w-3 h-3" />
-                Progresso do preparo
-              </span>
-              <span className={`font-medium ${isLate ? 'text-red-600' : 'text-blue-600'}`}>
-                {producaoStatus?.progresso ?? dptInfo?.progresso ?? progress}%
-              </span>
             </div>
-            <Progress 
-              value={Math.min(100, producaoStatus?.progresso ?? dptInfo?.progresso ?? progress)} 
-              className={`h-2.5 ${
-                producaoStatus?.urgencia === "vermelho" || isLate ? '[&>div]:bg-red-500' : 
-                producaoStatus?.urgencia === "amarelo" ? '[&>div]:bg-amber-500' : ''
-              }`}
-            />
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>{producaoStatus?.tempoDecorrido ? Math.floor(producaoStatus.tempoDecorrido / 60) : tempoDecorrido} min decorridos</span>
-              {producaoStatus?.tempoRestante !== undefined && producaoStatus.tempoRestante < 0 ? (
-                <span className="font-bold text-red-600 animate-pulse">
-                  +{Math.abs(Math.floor(producaoStatus.tempoRestante / 60))} min ATRASADO
-                </span>
-              ) : (
-                <span className={`font-semibold ${producaoStatus?.urgencia === "vermelho" ? 'text-red-600' : ''}`}>
-                  {producaoStatus ? Math.floor(producaoStatus.tempoRestante / 60) : Math.max(0, dpt - tempoDecorrido)} min restantes
-                </span>
-              )}
-            </div>
-            {producaoStatus?.proximaEtapa && (
-              <div className="text-[10px] text-center text-muted-foreground bg-muted/50 py-1 rounded">
-                Próxima etapa: <span className="font-medium">{producaoStatus.proximaEtapa}</span>
-              </div>
-            )}
           </div>
         )}
       </CardHeader>
       
-      <CardContent className={compact ? "p-3 pt-0" : "p-4 pt-0"}>
-        <div className="space-y-3">
-          <div className="bg-muted/30 rounded-lg p-2.5">
-            <ul className="space-y-1">
+      <CardContent className={compact ? "p-4 pt-0" : "p-5 pt-0"}>
+        <div className="space-y-4">
+          <div className="bg-muted/30 dark:bg-muted/10 rounded-lg p-3">
+            <ul className="space-y-2">
               {pedido.itens.map((item, idx) => (
                 <li 
                   key={idx} 
-                  className="flex items-start gap-2 text-sm"
+                  className="flex items-start gap-3 text-base md:text-lg"
                   data-testid={`kds-item-${pedido.id}-${idx}`}
                 >
-                  <span className="font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded text-xs min-w-[24px] text-center">
+                  <span className="font-bold text-primary bg-primary/10 px-2 py-1 rounded text-sm md:text-base min-w-[32px] text-center">
                     {item.quantidade}x
                   </span>
-                  <span className="flex-1 font-medium">{item.nome}</span>
+                  <span className="flex-1 font-semibold">{item.nome}</span>
                   {item.validado === false && (
-                    <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
                   )}
                 </li>
               ))}
@@ -417,30 +417,30 @@ export default function PedidoCardKDS({
           </div>
 
           {pedido.observacoes && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3">
               <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-sm text-amber-800 font-medium">{pedido.observacoes}</p>
+                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-base text-amber-800 dark:text-amber-200 font-medium">{pedido.observacoes}</p>
               </div>
             </div>
           )}
 
           {pedido.enderecoEntrega && !compact && (
-            <div className="flex items-start gap-2 text-sm text-muted-foreground">
-              <Truck className="w-4 h-4 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-2 text-base text-muted-foreground">
+              <Truck className="w-5 h-5 shrink-0 mt-0.5" />
               <span className="truncate">{pedido.enderecoEntrega}</span>
             </div>
           )}
 
           {pedido.tempoEntregaEstimado && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-blue-50 px-2 py-1.5 rounded-md">
-              <Clock className="w-3.5 h-3.5 text-blue-500" />
-              <span>Tempo total estimado: <strong className="text-blue-700">{pedido.tempoEntregaEstimado} min</strong> (preparo + entrega)</span>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
+              <Clock className="w-4 h-4 text-blue-500 dark:text-blue-400" />
+              <span>Tempo total: <strong className="text-blue-700 dark:text-blue-300">{pedido.tempoEntregaEstimado} min</strong></span>
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-2 border-t gap-2">
-            <span className="font-bold text-lg text-primary">
+          <div className="flex items-center justify-between pt-3 border-t gap-3">
+            <span className="font-bold text-xl md:text-2xl text-primary">
               R$ {parseFloat(pedido.total).toFixed(2)}
             </span>
             
@@ -448,14 +448,14 @@ export default function PedidoCardKDS({
               <Button
                 onClick={handleActionClick}
                 disabled={isUpdating}
-                size={compact ? "sm" : "default"}
-                className={`shrink-0 ${config.useDPTStart ? 'bg-orange-500 hover:bg-orange-600' : ''} ${config.useDPTFinish ? 'bg-green-500 hover:bg-green-600' : ''}`}
+                size="lg"
+                className={`shrink-0 text-base md:text-lg px-6 h-12 ${config.useDPTStart ? 'bg-orange-500 hover:bg-orange-600' : ''} ${config.useDPTFinish ? 'bg-green-500 hover:bg-green-600' : ''}`}
                 data-testid={`kds-action-${pedido.id}`}
               >
                 {isUpdating ? (
-                  <RefreshCw className="w-4 h-4 mr-1.5 animate-spin" />
+                  <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
                 ) : (
-                  <NextIcon className="w-4 h-4 mr-1.5" />
+                  <NextIcon className="w-5 h-5 mr-2" />
                 )}
                 {config.nextLabel}
               </Button>

@@ -12,6 +12,8 @@ interface KPICardProps {
   formato?: "moeda" | "numero" | "percentual";
   corIcone?: string;
   loading?: boolean;
+  critico?: boolean;
+  alerta?: boolean;
 }
 
 export default function KPICard({
@@ -23,6 +25,8 @@ export default function KPICard({
   formato = "numero",
   corIcone = "text-primary",
   loading = false,
+  critico = false,
+  alerta = false,
 }: KPICardProps) {
   const formatarValor = (val: string | number): string => {
     if (typeof val === "string") return val;
@@ -89,9 +93,35 @@ export default function KPICard({
     );
   }
 
+  const cardClasses = cn(
+    "overflow-hidden hover:shadow-md transition-shadow",
+    critico && "ring-2 ring-red-500 bg-red-50/50 dark:bg-red-900/10",
+    alerta && !critico && "ring-1 ring-amber-400 bg-amber-50/50 dark:bg-amber-900/10"
+  );
+
+  const iconBgClasses = cn(
+    "p-3 rounded-xl",
+    critico ? "bg-red-100 dark:bg-red-900/30" :
+    alerta ? "bg-amber-100 dark:bg-amber-900/30" :
+    corIcone.includes("bg-") ? corIcone : "bg-primary/10"
+  );
+
+  const iconColorClasses = cn(
+    "w-6 h-6",
+    critico ? "text-red-600 dark:text-red-400" :
+    alerta ? "text-amber-600 dark:text-amber-400" :
+    corIcone.includes("text-") ? corIcone : "text-primary"
+  );
+
+  const valueClasses = cn(
+    "text-2xl font-bold tracking-tight",
+    critico && "text-red-600 dark:text-red-400",
+    alerta && !critico && "text-amber-600 dark:text-amber-400"
+  );
+
   return (
     <Card 
-      className="overflow-hidden hover:shadow-md transition-shadow"
+      className={cardClasses}
       data-testid={`kpi-card-${titulo.toLowerCase().replace(/\s+/g, "-")}`}
     >
       <CardContent className="p-6">
@@ -100,7 +130,7 @@ export default function KPICard({
             <p className="text-sm font-medium text-muted-foreground">
               {titulo}
             </p>
-            <p className="text-2xl font-bold tracking-tight" data-testid={`kpi-valor-${titulo.toLowerCase().replace(/\s+/g, "-")}`}>
+            <p className={valueClasses} data-testid={`kpi-valor-${titulo.toLowerCase().replace(/\s+/g, "-")}`}>
               {formatarValor(valor)}
             </p>
             
@@ -126,14 +156,8 @@ export default function KPICard({
             </div>
           </div>
           
-          <div className={cn(
-            "p-3 rounded-xl bg-primary/10",
-            corIcone.includes("bg-") ? corIcone : ""
-          )}>
-            <Icone className={cn(
-              "w-6 h-6",
-              corIcone.includes("text-") ? corIcone : "text-primary"
-            )} />
+          <div className={iconBgClasses}>
+            <Icone className={iconColorClasses} />
           </div>
         </div>
       </CardContent>
