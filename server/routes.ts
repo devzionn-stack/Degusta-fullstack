@@ -43,6 +43,11 @@ import {
   getHistoricoPrecosMercado,
 } from "./custo_lucro";
 import { webhookCustoMercadoSchema } from "@shared/schema";
+import { 
+  processarMensagemIA, 
+  atualizarEstoqueIngrediente as atualizarEstoqueIngredienteAPI, 
+  cancelarMotoboy as cancelarMotoboyAPI 
+} from "./agente-ia";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -2757,6 +2762,102 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error getting price history:", error);
       res.status(500).json({ error: "Falha ao obter histórico de preços" });
+    }
+  });
+
+  // ============================================
+  // AI AGENT ROUTES
+  // ============================================
+
+  app.post("/api/agente-ia/chat", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+
+      if (user.role !== "tenant_admin" && user.role !== "super_admin") {
+        return res.status(403).json({ error: "Acesso negado. Apenas administradores podem usar o Agente de IA." });
+      }
+
+      const { mensagem, historico } = req.body;
+
+      if (!mensagem || typeof mensagem !== "string") {
+        return res.status(400).json({ error: "Mensagem é obrigatória" });
+      }
+
+      const resultado = await processarMensagemIA(tenantId, mensagem, historico || []);
+
+      res.json({
+        resposta: resultado.resposta,
+        toolsUsed: resultado.toolsUsed,
+      });
+    } catch (error: any) {
+      console.error("Error processing AI chat:", error);
+
+      if (error.message === "FREE_CLOUD_BUDGET_EXCEEDED") {
+        return res.status(402).json({ error: "Limite de uso da IA excedido. Por favor, atualize seu plano." });
+      }
+
+      res.status(500).json({ error: "Falha ao processar mensagem do agente de IA" });
+    }
+  });
+
+  app.post("/api/estoque/atualizar", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+
+      if (user.role !== "tenant_admin" && user.role !== "super_admin") {
+        return res.status(403).json({ error: "Acesso negado" });
+      }
+
+      const { ingredienteId, novaQuantidade, nomeIngrediente } = req.body;
+
+      if (novaQuantidade === undefined || (novaQuantidade < 0)) {
+        return res.status(400).json({ error: "Nova quantidade é obrigatória e deve ser positiva" });
+      }
+
+      const resultado = await atualizarEstoqueIngredienteAPI(
+        tenantId,
+        ingredienteId || nomeIngrediente,
+        novaQuantidade
+      );
+
+      if (!resultado.sucesso) {
+        return res.status(404).json({ error: resultado.mensagem });
+      }
+
+      res.json(resultado);
+    } catch (error) {
+      console.error("Error updating stock:", error);
+      res.status(500).json({ error: "Falha ao atualizar estoque" });
+    }
+  });
+
+  app.post("/api/frota/cancelar", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+
+      if (user.role !== "tenant_admin" && user.role !== "super_admin") {
+        return res.status(403).json({ error: "Acesso negado" });
+      }
+
+      const { motoboyId, motoboyNome } = req.body;
+
+      if (!motoboyId && !motoboyNome) {
+        return res.status(400).json({ error: "ID ou nome do motoboy é obrigatório" });
+      }
+
+      const resultado = await cancelarMotoboyAPI(tenantId, motoboyId || motoboyNome);
+
+      if (!resultado.sucesso) {
+        return res.status(404).json({ error: resultado.mensagem });
+      }
+
+      res.json(resultado);
+    } catch (error) {
+      console.error("Error canceling motoboy:", error);
+      res.status(500).json({ error: "Falha ao cancelar motoboy" });
     }
   });
 

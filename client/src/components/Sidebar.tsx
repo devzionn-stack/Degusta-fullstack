@@ -33,6 +33,7 @@ import {
   Truck,
   Brain,
   Coins,
+  Bot,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -54,6 +55,7 @@ const navItems = [
   { icon: Package, label: "Produtos", path: "/dashboard/produtos" },
   { icon: Warehouse, label: "Estoque", path: "/dashboard/estoque" },
   { icon: Coins, label: "Custos", path: "/dashboard/custos" },
+  { icon: Bot, label: "Agente IA", path: "/dashboard/agente-ia" },
   { icon: Truck, label: "Logística", path: "/dashboard/logistica" },
   { icon: DollarSign, label: "Financeiro", path: "/dashboard/financeiro" },
   { icon: Brain, label: "Inteligência", path: "/dashboard/inteligencia" },
