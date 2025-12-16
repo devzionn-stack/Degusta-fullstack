@@ -28,6 +28,7 @@ import {
   gerarTokenMotoboy,
 } from "./geo_service";
 import { despacharPedido, finalizarEntrega, selecionarMotoboyIdeal } from "./despacho";
+import { calcularTempoLoop, atualizarTimingPedido, listarPedidosProducao, getStatusProducaoPedido } from "./producao_timing";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -843,6 +844,13 @@ export async function registerRoutes(
         quantidade: i.quantidade,
       })));
 
+      const loopResult = await calcularTempoLoop(tenantId, processedItems.map(i => ({
+        produtoId: i.produtoId || undefined,
+        nome: i.nome,
+        quantidade: i.quantidade,
+        precoUnitario: i.precoUnitario,
+      })));
+
       const pedido = await storage.createPedido({
         tenantId,
         clienteId: cliente?.id || null,
@@ -854,6 +862,8 @@ export async function registerRoutes(
         origem: "n8n",
         tempoPreparoEstimado: dptResult.tempoPreparoEstimado,
         tempoEntregaEstimado: dptResult.tempoEntregaEstimado,
+        tempoMetaMontagem: Math.ceil(loopResult.tempoMetaMontagem / 60),
+        numeroLoop: Math.ceil(loopResult.tempoLoop / 60),
       });
 
       broadcastNewOrder(tenantId, pedido);
@@ -2332,6 +2342,72 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error finishing prep:", error);
       res.status(500).json({ error: "Failed to finish prep" });
+    }
+  });
+
+  // ============================================
+  // PRODUCAO TIMING ROUTES (KDS Advanced)
+  // ============================================
+
+  app.get("/api/producao/status", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const statusList = await listarPedidosProducao(tenantId);
+      res.json(statusList);
+    } catch (error) {
+      console.error("Error fetching production status:", error);
+      res.status(500).json({ error: "Failed to fetch production status" });
+    }
+  });
+
+  app.get("/api/producao/pedido/:pedidoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { pedidoId } = req.params;
+      const status = await getStatusProducaoPedido(pedidoId, tenantId);
+      if (!status) {
+        return res.status(404).json({ error: "Pedido não encontrado" });
+      }
+      res.json(status);
+    } catch (error) {
+      console.error("Error fetching order production status:", error);
+      res.status(500).json({ error: "Failed to fetch order production status" });
+    }
+  });
+
+  app.post("/api/producao/calcular-loop", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { itens } = req.body;
+
+      if (!itens || !Array.isArray(itens)) {
+        return res.status(400).json({ error: "Itens array is required" });
+      }
+
+      const loopResult = await calcularTempoLoop(tenantId, itens);
+      res.json(loopResult);
+    } catch (error) {
+      console.error("Error calculating loop time:", error);
+      res.status(500).json({ error: "Failed to calculate loop time" });
+    }
+  });
+
+  app.post("/api/producao/atualizar-timing/:pedidoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { pedidoId } = req.params;
+
+      await atualizarTimingPedido(pedidoId, tenantId);
+      
+      const pedido = await storage.getPedido(pedidoId, tenantId);
+      if (pedido) {
+        broadcastOrderStatusChange(tenantId, pedido);
+      }
+
+      res.json({ success: true, message: "Timing atualizado" });
+    } catch (error) {
+      console.error("Error updating order timing:", error);
+      res.status(500).json({ error: "Failed to update order timing" });
     }
   });
 
