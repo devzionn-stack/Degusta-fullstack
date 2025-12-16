@@ -238,3 +238,39 @@ Core tables with UUID primary keys:
 - Products tab with cost breakdown and margin analysis
 - Ingredients tab with usage and historical cost tracking
 - Summary tab with financial overview
+
+### Proactive Customer Communication System
+
+**Service**: `server/alerta_chegada.ts` - Arrival alerts and ETA notifications
+
+**Database Schema**:
+- `pedidos.alertaEta10MinEnviado` - Tracks if ETA-10min alert was sent
+- `pedidos.alertaChegandoEnviado` - Tracks if "arriving" alert was sent
+
+**Key Features**:
+- ETA - 10 minutes alert: Automatic notification when pizza is ~10 minutes away
+- 50-meter geofence alert: Notification when motoboy is within 50m of destination
+- Tenant-scoped processing for security
+- N8N webhook integration for WhatsApp message delivery
+
+**Functions**:
+- `calcularMomentoAlertaETA(etaMinutos, etaCalculadoEm)` - Calculates ETA-10min threshold time
+- `verificarMomentoAlerta(etaMinutos, etaCalculadoEm)` - Returns true if alert moment reached
+- `verificarProximidadeDestino(motoboyLat, motoboyLng, destinoLat, destinoLng)` - Checks 50m geofence
+
+**Cron Job**: Runs every 60 seconds
+- Iterates per-tenant for security isolation
+- Scans orders in "saiu_entrega" status
+- Checks if ETA-10min moment reached
+- Sends `alerta_eta_10_min` webhook to N8N
+
+**Geofence Integration**: In `/api/motoboy/localizacao`
+- After each location update, checks distance to destination
+- If within 50 meters, sends `pizza_chegando` webhook to N8N
+- Validates tenant/motoboy ownership before sending alerts
+
+**Webhook Payloads**:
+- `alerta_eta_10_min`: clienteNome, clienteTelefone, etaMinutos, enderecoEntrega, mensagem
+- `pizza_chegando`: clienteNome, clienteTelefone, distanciaMetros, enderecoEntrega, mensagem
+
+**Security**: All alerts are tenant-scoped and motoboy-validated to prevent cross-tenant data leakage
