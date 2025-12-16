@@ -1,6 +1,9 @@
 import type { Express } from "express";
 import { type Server } from "http";
 import { storage } from "./storage";
+import { db } from "./db";
+import { pedidos } from "@shared/schema";
+import { and, eq } from "drizzle-orm";
 import { hashPassword, comparePasswords, requireAuth, requireTenant, requireSuperAdmin, regenerateSession } from "./auth";
 import { validateN8nWebhook, generateApiKey } from "./webhook-security";
 import { sendToN8n, notifyN8nNewOrder } from "./n8n-requester";
@@ -29,6 +32,7 @@ import {
 } from "./geo_service";
 import { despacharPedido, finalizarEntrega, selecionarMotoboyIdeal } from "./despacho";
 import { calcularTempoLoop, atualizarTimingPedido, listarPedidosProducao, getStatusProducaoPedido } from "./producao_timing";
+import { verificarProximidadeDestino, enviarAlertaPizzaChegando } from "./alerta_chegada";
 import {
   atualizarPrecoMercado,
   calcularCustoProduto,
@@ -2445,6 +2449,38 @@ export async function registerRoutes(
       }
 
       await atualizarLocalizacaoMotoboy(motoboy.id, motoboy.tenantId, lat, lng);
+
+      const pedidosMotoboy = await db
+        .select({
+          id: pedidos.id,
+          destinoLat: pedidos.destinoLat,
+          destinoLng: pedidos.destinoLng,
+          alertaChegandoEnviado: pedidos.alertaChegandoEnviado,
+        })
+        .from(pedidos)
+        .where(
+          and(
+            eq(pedidos.motoboyId, motoboy.id),
+            eq(pedidos.status, "saiu_entrega"),
+            eq(pedidos.tenantId, motoboy.tenantId)
+          )
+        );
+
+      for (const pedido of pedidosMotoboy) {
+        if (pedido.destinoLat && pedido.destinoLng && !pedido.alertaChegandoEnviado) {
+          const { dentroGeofence, distanciaMetros } = verificarProximidadeDestino(
+            lat,
+            lng,
+            parseFloat(pedido.destinoLat),
+            parseFloat(pedido.destinoLng)
+          );
+
+          if (dentroGeofence) {
+            console.log(`[Geofence] Motoboy a ${distanciaMetros}m do destino - Pedido ${pedido.id}`);
+            await enviarAlertaPizzaChegando(pedido.id, distanciaMetros, motoboy.tenantId, motoboy.id);
+          }
+        }
+      }
 
       res.json({ success: true, message: "Localização atualizada" });
     } catch (error) {

@@ -95,6 +95,8 @@ export const pedidos = pgTable("pedidos", {
   rotaPolyline: text("rota_polyline"),
   destinoLat: decimal("destino_lat", { precision: 10, scale: 7 }),
   destinoLng: decimal("destino_lng", { precision: 10, scale: 7 }),
+  alertaEta10MinEnviado: boolean("alerta_eta_10min_enviado").default(false),
+  alertaChegandoEnviado: boolean("alerta_chegando_enviado").default(false),
   inicioPreparoAt: timestamp("inicio_preparo_at"),
   prontoEntregaAt: timestamp("pronto_entrega_at"),
   saiuEntregaAt: timestamp("saiu_entrega_at"),

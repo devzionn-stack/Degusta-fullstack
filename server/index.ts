@@ -9,6 +9,7 @@ import connectPgSimple from "connect-pg-simple";
 import { setupWebSocket } from "./websocket";
 import { getSessionSecret } from "./session-config";
 import { iniciarCronETA } from "./eta_cron";
+import { iniciarCronAlertaChegada } from "./alerta_chegada";
 
 const app = express();
 const httpServer = createServer(app);
@@ -121,6 +122,7 @@ app.use((req, res, next) => {
     () => {
       log(`serving on port ${port}`);
       iniciarCronETA();
+      iniciarCronAlertaChegada();
     },
   );
 })();
