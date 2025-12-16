@@ -61,7 +61,7 @@
   --color-sidebar-accent-border: var(--sidebar-accent-border);
 }
 
-/* LIGHT MODE - PIZZERIA THEME */
+/* LIGHT MODE - DEGUSTA PIZZA THEME */
 :root {
   --button-outline: rgba(0,0,0, .10);
   --badge-outline: rgba(0,0,0, .05);
@@ -69,61 +69,61 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  /* Creamy Dough Background */
-  --background: 40 30% 96%;
+  /* Light Cream Background */
+  --background: 30 20% 97%;
   /* Charcoal Text */
-  --foreground: 0 0% 20%;
+  --foreground: 0 0% 15%;
 
   /* White Card */
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 20%;
+  --card-foreground: 0 0% 15%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 20%;
+  --popover-foreground: 0 0% 15%;
 
-  /* Tomato Red */
-  --primary: 358 76% 55%;
+  /* Degusta Red - Primary Brand Color */
+  --primary: 5 85% 50%;
   --primary-foreground: 0 0% 100%;
 
-  /* Basil Green */
-  --secondary: 140 40% 45%;
+  /* Degusta Orange - Secondary Brand Color */
+  --secondary: 25 95% 53%;
   --secondary-foreground: 0 0% 100%;
 
-  /* Wheat/Dough Muted */
-  --muted: 40 20% 90%;
+  /* Light Gray Muted */
+  --muted: 30 10% 92%;
   --muted-foreground: 0 0% 40%;
 
-  /* Cheese Yellow Accent */
-  --accent: 45 90% 55%;
+  /* Golden Yellow Accent */
+  --accent: 42 100% 50%;
   --accent-foreground: 0 0% 10%;
 
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 40 20% 85%;
-  --input: 40 20% 85%;
-  --ring: 358 76% 55%;
+  --border: 30 15% 88%;
+  --input: 30 15% 88%;
+  --ring: 5 85% 50%;
 
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 
-  /* Charts - Warm/Italian Palette */
-  --chart-1: 358 76% 55%; /* Red */
-  --chart-2: 140 40% 45%; /* Green */
-  --chart-3: 45 90% 55%; /* Yellow */
-  --chart-4: 25 85% 50%; /* Orange */
-  --chart-5: 0 0% 20%;   /* Black */
+  /* Charts - Degusta Warm Palette */
+  --chart-1: 5 85% 50%;   /* Red */
+  --chart-2: 25 95% 53%;  /* Orange */
+  --chart-3: 42 100% 50%; /* Yellow/Gold */
+  --chart-4: 140 50% 45%; /* Green */
+  --chart-5: 0 0% 20%;    /* Dark */
 
-  --sidebar: 40 30% 96%;
-  --sidebar-foreground: 0 0% 20%;
-  --sidebar-primary: 358 76% 55%;
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 0 0% 15%;
+  --sidebar-primary: 5 85% 50%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 40 20% 90%;
-  --sidebar-accent-foreground: 0 0% 20%;
-  --sidebar-border: 40 20% 85%;
-  --sidebar-ring: 358 76% 55%;
+  --sidebar-accent: 30 10% 94%;
+  --sidebar-accent-foreground: 0 0% 15%;
+  --sidebar-border: 30 15% 88%;
+  --sidebar-ring: 5 85% 50%;
   
-  --font-sans: 'Lato', sans-serif;
-  --font-serif: 'Playfair Display', serif;
+  --font-sans: 'Poppins', 'Inter', sans-serif;
+  --font-serif: 'Poppins', sans-serif;
   --font-mono: 'Fira Code', monospace;
 
   /* Shadows */
@@ -144,55 +144,55 @@
 }
 
 .dark {
-  /* Dark Mode Pizzeria - Brick Oven Style */
+  /* Dark Mode - Degusta Pizza Brick Oven Style */
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);
   --opaque-button-border-intensity: 9;
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  --background: 0 0% 10%;
-  --foreground: 40 30% 96%;
+  --background: 0 0% 7%;
+  --foreground: 30 20% 95%;
 
-  --card: 0 0% 12%;
-  --card-foreground: 40 30% 96%;
+  --card: 0 0% 10%;
+  --card-foreground: 30 20% 95%;
 
-  --popover: 0 0% 12%;
-  --popover-foreground: 40 30% 96%;
+  --popover: 0 0% 10%;
+  --popover-foreground: 30 20% 95%;
 
-  --primary: 358 76% 55%;
+  --primary: 5 85% 55%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 140 40% 45%;
+  --secondary: 25 95% 55%;
   --secondary-foreground: 0 0% 100%;
 
-  --muted: 0 0% 20%;
-  --muted-foreground: 0 0% 60%;
+  --muted: 0 0% 15%;
+  --muted-foreground: 0 0% 65%;
 
-  --accent: 45 90% 55%;
+  --accent: 42 100% 55%;
   --accent-foreground: 0 0% 10%;
 
-  --destructive: 0 62.8% 30.6%;
+  --destructive: 0 62.8% 35%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 0 0% 20%;
-  --input: 0 0% 20%;
-  --ring: 358 76% 55%;
+  --border: 0 0% 18%;
+  --input: 0 0% 18%;
+  --ring: 5 85% 55%;
   
-  --chart-1: 358 76% 55%;
-  --chart-2: 140 40% 45%;
-  --chart-3: 45 90% 55%;
-  --chart-4: 25 85% 50%;
+  --chart-1: 5 85% 55%;
+  --chart-2: 25 95% 55%;
+  --chart-3: 42 100% 55%;
+  --chart-4: 140 50% 50%;
   --chart-5: 0 0% 80%;
 
-  --sidebar: 0 0% 10%;
-  --sidebar-foreground: 40 30% 96%;
-  --sidebar-primary: 358 76% 55%;
+  --sidebar: 0 0% 8%;
+  --sidebar-foreground: 30 20% 95%;
+  --sidebar-primary: 5 85% 55%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 0 0% 20%;
-  --sidebar-accent-foreground: 40 30% 96%;
-  --sidebar-border: 0 0% 20%;
-  --sidebar-ring: 358 76% 55%;
+  --sidebar-accent: 0 0% 15%;
+  --sidebar-accent-foreground: 30 20% 95%;
+  --sidebar-border: 0 0% 18%;
+  --sidebar-ring: 5 85% 55%;
 }
 
 @layer base {
