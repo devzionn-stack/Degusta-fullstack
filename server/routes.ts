@@ -862,8 +862,8 @@ export async function registerRoutes(
         origem: "n8n",
         tempoPreparoEstimado: dptResult.tempoPreparoEstimado,
         tempoEntregaEstimado: dptResult.tempoEntregaEstimado,
-        tempoMetaMontagem: Math.ceil(loopResult.tempoMetaMontagem / 60),
-        numeroLoop: Math.ceil(loopResult.tempoLoop / 60),
+        tempoMetaMontagem: loopResult.tempoMetaMontagem,
+        numeroLoop: loopResult.tempoLoop,
       });
 
       broadcastNewOrder(tenantId, pedido);

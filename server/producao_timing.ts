@@ -69,9 +69,10 @@ export async function calcularTempoLoop(
     .orderBy(etapasProducao.ordem);
 
   const numeroEtapas = etapasData.length || 4;
-  const tempoLoop = Math.ceil(tempoTotalPreparo / numeroEtapas);
+  const tempoLoopSegundos = Math.ceil(tempoTotalPreparo / numeroEtapas);
+  const tempoLoopMinutos = Math.ceil(tempoLoopSegundos / 60);
 
-  const tempoMetaMontagem = tempoTotalPreparo;
+  const tempoMetaMontagemMinutos = Math.ceil(tempoTotalPreparo / 60);
 
   const etapasComMomento = etapasData.map((etapa, index) => {
     const momentoAcao = tempoTotalPreparo - etapa.tempoMetaSegundos * (index + 1);
@@ -104,8 +105,8 @@ export async function calcularTempoLoop(
   return {
     tempoTotalPreparo,
     numeroEtapas,
-    tempoLoop,
-    tempoMetaMontagem,
+    tempoLoop: tempoLoopMinutos,
+    tempoMetaMontagem: tempoMetaMontagemMinutos,
     etapas: etapasComMomento,
   };
 }
@@ -130,8 +131,8 @@ export async function atualizarTimingPedido(
   await db
     .update(pedidos)
     .set({
-      tempoMetaMontagem: Math.ceil(timing.tempoMetaMontagem / 60),
-      numeroLoop: Math.ceil(timing.tempoLoop / 60),
+      tempoMetaMontagem: timing.tempoMetaMontagem,
+      numeroLoop: timing.tempoLoop,
       tempoPreparoEstimado: Math.ceil(timing.tempoTotalPreparo / 60),
       updatedAt: new Date(),
     })
@@ -179,13 +180,14 @@ export async function getStatusProducaoPedido(
     );
   }
 
-  const progresso = Math.min(100, (tempoDecorrido / tempoMetaMontagem) * 100);
-  const tempoRestante = Math.max(0, tempoMetaMontagem - tempoDecorrido);
+  const progressoReal = (tempoDecorrido / tempoMetaMontagem) * 100;
+  const progresso = Math.round(progressoReal);
+  const tempoRestante = tempoMetaMontagem - tempoDecorrido;
 
   let urgencia: "verde" | "amarelo" | "vermelho" = "verde";
-  if (progresso >= 100) {
+  if (progressoReal >= 100) {
     urgencia = "vermelho";
-  } else if (progresso >= 80) {
+  } else if (progressoReal >= 80) {
     urgencia = "amarelo";
   }
 
@@ -200,13 +202,19 @@ export async function getStatusProducaoPedido(
 
   if (etapasData.length > 0) {
     let tempoAcumulado = 0;
+    let encontrouEtapa = false;
     for (let i = 0; i < etapasData.length; i++) {
       tempoAcumulado += etapasData[i].tempoMetaSegundos;
       if (tempoDecorrido < tempoAcumulado) {
         etapaAtual = etapasData[i].nome;
         proximaEtapa = i < etapasData.length - 1 ? etapasData[i + 1].nome : null;
+        encontrouEtapa = true;
         break;
       }
+    }
+    if (!encontrouEtapa && etapasData.length > 0) {
+      etapaAtual = etapasData[etapasData.length - 1].nome + " (atrasado)";
+      proximaEtapa = null;
     }
   }
 

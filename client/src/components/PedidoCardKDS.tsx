@@ -50,6 +50,18 @@ interface DPTRealtimeInfo {
   atrasado: boolean;
 }
 
+interface ProducaoStatus {
+  pedidoId: string;
+  tempoDecorrido: number;
+  tempoMetaMontagem: number;
+  numeroLoop: number;
+  progresso: number;
+  urgencia: "verde" | "amarelo" | "vermelho";
+  etapaAtual: string;
+  proximaEtapa: string | null;
+  tempoRestante: number;
+}
+
 interface PedidoCardKDSProps {
   pedido: Pedido;
   onStatusChange: (pedidoId: string, newStatus: string) => void;
@@ -58,6 +70,7 @@ interface PedidoCardKDSProps {
   isUpdating?: boolean;
   compact?: boolean;
   dptInfo?: DPTRealtimeInfo;
+  producaoStatus?: ProducaoStatus;
 }
 
 const STATUS_CONFIG: Record<string, {
@@ -231,7 +244,8 @@ export default function PedidoCardKDS({
   onFinishPreparo,
   isUpdating = false,
   compact = false,
-  dptInfo 
+  dptInfo,
+  producaoStatus
 }: PedidoCardKDSProps) {
   const config = STATUS_CONFIG[pedido.status as keyof typeof STATUS_CONFIG];
   
@@ -325,24 +339,57 @@ export default function PedidoCardKDS({
         </div>
 
         {pedido.status === "em_preparo" && (
-          <div className="mt-3 space-y-1">
+          <div className="mt-3 space-y-2">
+            {producaoStatus && (
+              <div className="flex items-center justify-between gap-2">
+                <div className={`
+                  flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold
+                  ${producaoStatus.urgencia === "vermelho" ? "bg-red-100 text-red-800 border border-red-300 animate-pulse" : ""}
+                  ${producaoStatus.urgencia === "amarelo" ? "bg-amber-100 text-amber-800 border border-amber-300" : ""}
+                  ${producaoStatus.urgencia === "verde" ? "bg-green-100 text-green-800 border border-green-300" : ""}
+                `}>
+                  <Clock className="w-3.5 h-3.5" />
+                  Loop: {producaoStatus.numeroLoop}min
+                </div>
+                <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-lg text-xs text-blue-700 font-medium border border-blue-200">
+                  <ChefHat className="w-3.5 h-3.5" />
+                  {producaoStatus.etapaAtual}
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between text-xs">
               <span className="flex items-center gap-1 text-muted-foreground">
                 <TrendingUp className="w-3 h-3" />
                 Progresso do preparo
               </span>
               <span className={`font-medium ${isLate ? 'text-red-600' : 'text-blue-600'}`}>
-                {dptInfo?.progresso ?? progress}%
+                {producaoStatus?.progresso ?? dptInfo?.progresso ?? progress}%
               </span>
             </div>
             <Progress 
-              value={dptInfo?.progresso ?? progress} 
-              className={`h-2 ${isLate ? '[&>div]:bg-red-500' : ''}`}
+              value={Math.min(100, producaoStatus?.progresso ?? dptInfo?.progresso ?? progress)} 
+              className={`h-2.5 ${
+                producaoStatus?.urgencia === "vermelho" || isLate ? '[&>div]:bg-red-500' : 
+                producaoStatus?.urgencia === "amarelo" ? '[&>div]:bg-amber-500' : ''
+              }`}
             />
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>{tempoDecorrido} min decorridos</span>
-              <span>{Math.max(0, dpt - tempoDecorrido)} min restantes</span>
+              <span>{producaoStatus?.tempoDecorrido ? Math.floor(producaoStatus.tempoDecorrido / 60) : tempoDecorrido} min decorridos</span>
+              {producaoStatus?.tempoRestante !== undefined && producaoStatus.tempoRestante < 0 ? (
+                <span className="font-bold text-red-600 animate-pulse">
+                  +{Math.abs(Math.floor(producaoStatus.tempoRestante / 60))} min ATRASADO
+                </span>
+              ) : (
+                <span className={`font-semibold ${producaoStatus?.urgencia === "vermelho" ? 'text-red-600' : ''}`}>
+                  {producaoStatus ? Math.floor(producaoStatus.tempoRestante / 60) : Math.max(0, dpt - tempoDecorrido)} min restantes
+                </span>
+              )}
             </div>
+            {producaoStatus?.proximaEtapa && (
+              <div className="text-[10px] text-center text-muted-foreground bg-muted/50 py-1 rounded">
+                Próxima etapa: <span className="font-medium">{producaoStatus.proximaEtapa}</span>
+              </div>
+            )}
           </div>
         )}
       </CardHeader>

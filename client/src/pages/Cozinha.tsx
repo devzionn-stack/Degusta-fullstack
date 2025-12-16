@@ -58,6 +58,19 @@ interface DPTRealtimeInfo {
   prioridadeOrdenacao: number;
 }
 
+interface ProducaoStatus {
+  pedidoId: string;
+  status: string;
+  tempoDecorrido: number;
+  tempoMetaMontagem: number;
+  numeroLoop: number;
+  progresso: number;
+  urgencia: "verde" | "amarelo" | "vermelho";
+  etapaAtual: string;
+  proximaEtapa: string | null;
+  tempoRestante: number;
+}
+
 export default function Cozinha() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -121,6 +134,17 @@ export default function Cozinha() {
     },
     enabled: hasTenant,
     refetchInterval: 10000,
+  });
+
+  const { data: producaoStatusData = [] } = useQuery<ProducaoStatus[]>({
+    queryKey: ["producao-status"],
+    queryFn: async () => {
+      const res = await fetch(`/api/producao/status`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch production status");
+      return res.json();
+    },
+    enabled: hasTenant,
+    refetchInterval: 5000,
   });
 
   const startPreparo = useMutation({
@@ -194,6 +218,10 @@ export default function Cozinha() {
     } : undefined;
   };
 
+  const getProducaoStatus = (pedidoId: string) => {
+    return producaoStatusData.find(p => p.pedidoId === pedidoId);
+  };
+
   const playNotificationSound = useCallback(() => {
     if (soundEnabled) {
       try {
@@ -212,6 +240,8 @@ export default function Cozinha() {
       } else if (data.type === "pedido_update") {
         queryClient.invalidateQueries({ queryKey: ["pedidos-cozinha"] });
         queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+        queryClient.invalidateQueries({ queryKey: ["dpt-realtime"] });
+        queryClient.invalidateQueries({ queryKey: ["producao-status"] });
         
         if (data.action === "created") {
           playNotificationSound();
@@ -306,6 +336,12 @@ export default function Cozinha() {
     ? Math.round(dptRealtimeData.reduce((sum, d) => sum + d.progresso, 0) / dptRealtimeData.length)
     : 0;
 
+  const producaoUrgentes = producaoStatusData.filter(p => p.urgencia === "vermelho").length;
+  const producaoAmarelos = producaoStatusData.filter(p => p.urgencia === "amarelo").length;
+  const avgLoop = producaoStatusData.length > 0
+    ? Math.round(producaoStatusData.reduce((sum, p) => sum + p.numeroLoop, 0) / producaoStatusData.length)
+    : 0;
+
   const KDSContent = () => (
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -325,16 +361,28 @@ export default function Cozinha() {
         </div>
         
         <div className="flex items-center gap-2 flex-wrap">
-          {dptRealtimeData.length > 0 && (
-            <div className="flex items-center gap-3 mr-2">
+          {(dptRealtimeData.length > 0 || producaoStatusData.length > 0) && (
+            <div className="flex items-center gap-2 mr-2">
               <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full bg-blue-50 border border-blue-200">
                 <Gauge className="w-3.5 h-3.5 text-blue-600" />
                 <span className="text-blue-700 font-medium">DPT: {avgProgress}%</span>
               </div>
-              {atrasados > 0 && (
+              {avgLoop > 0 && (
+                <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full bg-purple-50 border border-purple-200">
+                  <Clock className="w-3.5 h-3.5 text-purple-600" />
+                  <span className="text-purple-700 font-medium">Loop: ~{avgLoop}min</span>
+                </div>
+              )}
+              {producaoUrgentes > 0 && (
                 <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full bg-red-50 border border-red-200 animate-pulse">
                   <Clock className="w-3.5 h-3.5 text-red-600" />
-                  <span className="text-red-700 font-medium">{atrasados} atrasados</span>
+                  <span className="text-red-700 font-medium">{producaoUrgentes} urgente(s)</span>
+                </div>
+              )}
+              {producaoAmarelos > 0 && !producaoUrgentes && (
+                <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full bg-amber-50 border border-amber-200">
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="text-amber-700 font-medium">{producaoAmarelos} atenção</span>
                 </div>
               )}
             </div>
@@ -473,6 +521,7 @@ export default function Cozinha() {
                     isUpdating={updatingPedidoId === pedido.id}
                     compact={pedidosByStatus.em_preparo.length > 3}
                     dptInfo={getDptInfo(pedido.id)}
+                    producaoStatus={getProducaoStatus(pedido.id)}
                   />
                 ))
               )}
