@@ -18,7 +18,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Pizza,
   LayoutDashboard,
   ShoppingBag,
   Users,
@@ -34,8 +33,13 @@ import {
   Brain,
   Coins,
   Bot,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import Logo from "@/components/Logo";
+import { useTheme } from "@/lib/theme";
 
 interface Tenant {
   id: string;
@@ -123,17 +127,26 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
 
   const currentTenant = tenants?.find((t) => t.id === user?.tenantId);
 
+  const { theme, toggleTheme } = useTheme();
+
   return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-            <Pizza className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="font-serif text-lg font-bold">Bella Napoli</h1>
-            <p className="text-xs text-muted-foreground">Sistema de Gestão</p>
-          </div>
+        <div className="flex items-center justify-between">
+          <Logo size="sm" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            className="h-8 w-8"
+            data-testid="button-theme-toggle"
+          >
+            {theme === "dark" ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
+          </Button>
         </div>
       </div>
 

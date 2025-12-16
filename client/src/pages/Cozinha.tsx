@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useLayoutEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
+import { useTheme } from "@/lib/theme";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   ChefHat, 
@@ -74,12 +75,17 @@ interface ProducaoStatus {
 export default function Cozinha() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { setTheme } = useTheme();
   const queryClient = useQueryClient();
   const [isConnected, setIsConnected] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [updatingPedidoId, setUpdatingPedidoId] = useState<string | null>(null);
   const hasTenant = !!user?.tenantId;
+
+  useLayoutEffect(() => {
+    setTheme("dark");
+  }, [setTheme]);
 
   const { data: pedidos = [], isLoading, refetch } = useQuery<Pedido[]>({
     queryKey: ["pedidos-cozinha"],
