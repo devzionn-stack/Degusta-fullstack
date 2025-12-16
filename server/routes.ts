@@ -29,6 +29,16 @@ import {
 } from "./geo_service";
 import { despacharPedido, finalizarEntrega, selecionarMotoboyIdeal } from "./despacho";
 import { calcularTempoLoop, atualizarTimingPedido, listarPedidosProducao, getStatusProducaoPedido } from "./producao_timing";
+import {
+  atualizarPrecoMercado,
+  calcularCustoProduto,
+  listarCustosProdutos,
+  calcularLucroFranquia,
+  listarLucrosFranquias,
+  calcularLucroPorIngrediente,
+  getHistoricoPrecosMercado,
+} from "./custo_lucro";
+import { webhookCustoMercadoSchema } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -2579,6 +2589,138 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error completing delivery:", error);
       res.status(500).json({ error: "Falha ao finalizar entrega" });
+    }
+  });
+
+  // ============================================
+  // CUSTO E LUCRO ROUTES
+  // ============================================
+
+  app.post("/api/custo/mercado", validateN8nWebhook, async (req, res) => {
+    try {
+      const tenantId = req.webhookTenant!.id;
+
+      const validation = webhookCustoMercadoSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          error: fromZodError(validation.error).toString(),
+        });
+      }
+
+      const { ingredienteId, precoMercado, fornecedor } = validation.data;
+
+      const resultado = await atualizarPrecoMercado(ingredienteId, precoMercado, tenantId, fornecedor);
+
+      if (!resultado.sucesso) {
+        return res.status(404).json({ error: resultado.erro });
+      }
+
+      res.json({
+        sucesso: true,
+        mensagem: "Preço de mercado atualizado com sucesso",
+        ingredienteId,
+        precoMercado,
+        tenantId,
+      });
+    } catch (error) {
+      console.error("Error updating market price:", error);
+      res.status(500).json({ error: "Falha ao atualizar preço de mercado" });
+    }
+  });
+
+  app.get("/api/custo/produto/:produtoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { produtoId } = req.params;
+
+      const custo = await calcularCustoProduto(produtoId, tenantId);
+
+      if (!custo) {
+        return res.status(404).json({ error: "Produto não encontrado" });
+      }
+
+      res.json(custo);
+    } catch (error) {
+      console.error("Error calculating product cost:", error);
+      res.status(500).json({ error: "Falha ao calcular custo do produto" });
+    }
+  });
+
+  app.get("/api/custo/produtos", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const custos = await listarCustosProdutos(tenantId);
+      res.json(custos);
+    } catch (error) {
+      console.error("Error listing product costs:", error);
+      res.status(500).json({ error: "Falha ao listar custos dos produtos" });
+    }
+  });
+
+  app.get("/api/lucro/franquia", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { dataInicio, dataFim } = req.query;
+
+      const lucro = await calcularLucroFranquia(
+        tenantId,
+        dataInicio ? new Date(dataInicio as string) : undefined,
+        dataFim ? new Date(dataFim as string) : undefined
+      );
+
+      if (!lucro) {
+        return res.status(404).json({ error: "Franquia não encontrada" });
+      }
+
+      res.json(lucro);
+    } catch (error) {
+      console.error("Error calculating franchise profit:", error);
+      res.status(500).json({ error: "Falha ao calcular lucro da franquia" });
+    }
+  });
+
+  app.get("/api/lucro/franquias", requireSuperAdmin, async (req, res) => {
+    try {
+      const lucros = await listarLucrosFranquias();
+      res.json(lucros);
+    } catch (error) {
+      console.error("Error listing franchise profits:", error);
+      res.status(500).json({ error: "Falha ao listar lucros das franquias" });
+    }
+  });
+
+  app.get("/api/lucro/ingredientes", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { dataInicio, dataFim } = req.query;
+
+      const lucros = await calcularLucroPorIngrediente(
+        tenantId,
+        dataInicio ? new Date(dataInicio as string) : undefined,
+        dataFim ? new Date(dataFim as string) : undefined
+      );
+
+      res.json(lucros);
+    } catch (error) {
+      console.error("Error calculating ingredient profits:", error);
+      res.status(500).json({ error: "Falha ao calcular lucro por ingrediente" });
+    }
+  });
+
+  app.get("/api/custo/historico/:ingredienteId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const { ingredienteId } = req.params;
+      const { limite } = req.query;
+
+      const historico = await getHistoricoPrecosMercado(
+        ingredienteId,
+        limite ? parseInt(limite as string) : 30
+      );
+
+      res.json(historico);
+    } catch (error) {
+      console.error("Error getting price history:", error);
+      res.status(500).json({ error: "Falha ao obter histórico de preços" });
     }
   });
 

@@ -32,6 +32,7 @@ import {
   Building2,
   Truck,
   Brain,
+  Coins,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -52,6 +53,7 @@ const navItems = [
   { icon: Users, label: "Clientes", path: "/dashboard/clientes" },
   { icon: Package, label: "Produtos", path: "/dashboard/produtos" },
   { icon: Warehouse, label: "Estoque", path: "/dashboard/estoque" },
+  { icon: Coins, label: "Custos", path: "/dashboard/custos" },
   { icon: Truck, label: "Logística", path: "/dashboard/logistica" },
   { icon: DollarSign, label: "Financeiro", path: "/dashboard/financeiro" },
   { icon: Brain, label: "Inteligência", path: "/dashboard/inteligencia" },

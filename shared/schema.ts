@@ -48,7 +48,8 @@ export const produtos = pgTable("produtos", {
 export const estoque = pgTable("estoque", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  produtoId: varchar("produto_id").notNull().references(() => produtos.id, { onDelete: "cascade" }),
+  produtoId: varchar("produto_id").references(() => produtos.id, { onDelete: "cascade" }),
+  ingredienteId: varchar("ingrediente_id"),
   quantidade: integer("quantidade").notNull().default(0),
   unidade: text("unidade").default('un'),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -206,6 +207,7 @@ export const ingredientes = pgTable("ingredientes", {
   nome: text("nome").notNull(),
   unidade: text("unidade").default('g'),
   custoUnitario: decimal("custo_unitario", { precision: 10, scale: 4 }),
+  idExternoEstoque: text("id_externo_estoque"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -216,6 +218,15 @@ export const receitasIngredientes = pgTable("receitas_ingredientes", {
   ingredienteId: varchar("ingrediente_id").notNull().references(() => ingredientes.id, { onDelete: "cascade" }),
   quantidade: decimal("quantidade", { precision: 10, scale: 3 }).notNull(),
   etapaProducaoId: varchar("etapa_producao_id").references(() => etapasProducao.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const custoMercado = pgTable("custo_mercado", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ingredienteId: varchar("ingrediente_id").notNull().references(() => ingredientes.id, { onDelete: "cascade" }),
+  precoMercado: decimal("preco_mercado", { precision: 10, scale: 4 }).notNull(),
+  fornecedor: text("fornecedor"),
+  dataAtualizacao: timestamp("data_atualizacao").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -409,3 +420,17 @@ export type InsertIngrediente = z.infer<typeof insertIngredienteSchema>;
 
 export type ReceitaIngrediente = typeof receitasIngredientes.$inferSelect;
 export type InsertReceitaIngrediente = z.infer<typeof insertReceitaIngredienteSchema>;
+
+export const insertCustoMercadoSchema = createInsertSchema(custoMercado).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CustoMercado = typeof custoMercado.$inferSelect;
+export type InsertCustoMercado = z.infer<typeof insertCustoMercadoSchema>;
+
+export const webhookCustoMercadoSchema = z.object({
+  ingredienteId: z.string(),
+  precoMercado: z.number().positive(),
+  fornecedor: z.string().optional(),
+});
