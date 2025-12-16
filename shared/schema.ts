@@ -41,6 +41,7 @@ export const produtos = pgTable("produtos", {
   categoria: text("categoria"),
   imagem: text("imagem"),
   tempoPreparoEstimado: integer("tempo_preparo_estimado").default(15),
+  tempoExtraPreparo: integer("tempo_extra_preparo").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -96,6 +97,8 @@ export const pedidos = pgTable("pedidos", {
   inicioPreparoAt: timestamp("inicio_preparo_at"),
   prontoEntregaAt: timestamp("pronto_entrega_at"),
   saiuEntregaAt: timestamp("saiu_entrega_at"),
+  tempoMetaMontagem: integer("tempo_meta_montagem"),
+  numeroLoop: integer("numero_loop"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -185,6 +188,34 @@ export const systemLogs = pgTable("system_logs", {
   entidadeId: varchar("entidade_id"),
   detalhes: jsonb("detalhes").$type<Record<string, any>>(),
   ip: text("ip"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const etapasProducao = pgTable("etapas_producao", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  nome: text("nome").notNull(),
+  tempoMetaSegundos: integer("tempo_meta_segundos").notNull().default(300),
+  ordem: integer("ordem").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const ingredientes = pgTable("ingredientes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  nome: text("nome").notNull(),
+  unidade: text("unidade").default('g'),
+  custoUnitario: decimal("custo_unitario", { precision: 10, scale: 4 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const receitasIngredientes = pgTable("receitas_ingredientes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  produtoId: varchar("produto_id").notNull().references(() => produtos.id, { onDelete: "cascade" }),
+  ingredienteId: varchar("ingrediente_id").notNull().references(() => ingredientes.id, { onDelete: "cascade" }),
+  quantidade: decimal("quantidade", { precision: 10, scale: 3 }).notNull(),
+  etapaProducaoId: varchar("etapa_producao_id").references(() => etapasProducao.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -354,3 +385,27 @@ export type InsertSystemLog = {
   detalhes?: Record<string, any> | null;
   ip?: string | null;
 };
+
+export const insertEtapaProducaoSchema = createInsertSchema(etapasProducao).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertIngredienteSchema = createInsertSchema(ingredientes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertReceitaIngredienteSchema = createInsertSchema(receitasIngredientes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type EtapaProducao = typeof etapasProducao.$inferSelect;
+export type InsertEtapaProducao = z.infer<typeof insertEtapaProducaoSchema>;
+
+export type Ingrediente = typeof ingredientes.$inferSelect;
+export type InsertIngrediente = z.infer<typeof insertIngredienteSchema>;
+
+export type ReceitaIngrediente = typeof receitasIngredientes.$inferSelect;
+export type InsertReceitaIngrediente = z.infer<typeof insertReceitaIngredienteSchema>;
