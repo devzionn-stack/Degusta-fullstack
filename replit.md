@@ -1,10 +1,23 @@
-# Bella Napoli Pizzeria - Multi-Tenant Pizza Management System
+# Degusta Pizzas - Multi-Tenant Pizza Franchise Management System
 
 ## Overview
 
 This is a full-stack multi-tenant pizzeria management system designed for franchise operations. The application enables multiple pizza franchises (tenants) to operate independently within a single system, with complete data isolation through Row Level Security (RLS). Each franchise can manage their own orders, customers, products, and inventory while maintaining strict data boundaries.
 
 The system provides authentication, a dashboard for monitoring key metrics, and comprehensive CRUD operations for managing pizzeria operations. It's built with a modern TypeScript stack featuring React on the frontend and Express on the backend, with PostgreSQL handling data persistence.
+
+## Recent Changes
+
+### December 23, 2025
+- Added Clientes (Customers) CRUD page with full management capabilities
+- Added Produtos (Products) CRUD page with category filtering and card-based display
+- Implemented TenantProvider context for global tenant selection management
+- Added TenantSelector component in dashboard header for super admin franchise switching
+- Updated requireTenant middleware to support super admin cross-tenant access via `tenantId` query parameter or `X-Tenant-Id` header
+- Added `getEffectiveTenantId` helper function in auth.ts for unified tenant ID access
+- Created `client/src/lib/api.ts` with `buildApiUrl` and `fetchWithTenant` helpers for tenant-aware API calls
+- Updated Dashboard, Clientes, and Produtos pages to use tenant context for super admin support
+- Fixed TenantProvider error handling for non-array API responses
 
 ## User Preferences
 

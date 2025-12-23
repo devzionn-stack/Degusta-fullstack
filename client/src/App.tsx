@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/lib/auth";
+import { TenantProvider } from "@/lib/tenant-context";
 import { ThemeProvider } from "@/lib/theme";
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
@@ -21,6 +22,8 @@ import Custos from "@/pages/Custos";
 import AgenteIA from "@/pages/AgenteIA";
 import Configuracoes from "@/pages/Configuracoes";
 import Rastreio from "@/pages/Rastreio";
+import Clientes from "@/pages/Clientes";
+import Produtos from "@/pages/Produtos";
 import SuperAdminDashboard from "@/pages/SuperAdminDashboard";
 import SuperAdminDashboardGlobal from "@/pages/SuperAdminDashboardGlobal";
 import SuperAdminLogistica from "@/pages/SuperAdminLogistica";
@@ -48,6 +51,8 @@ function Router() {
       <Route path="/dashboard/financeiro" component={Financeiro} />
       <Route path="/dashboard/inteligencia" component={Inteligencia} />
       <Route path="/dashboard/estoque" component={Estoque} />
+      <Route path="/dashboard/clientes" component={Clientes} />
+      <Route path="/dashboard/produtos" component={Produtos} />
       <Route path="/dashboard/custos" component={Custos} />
       <Route path="/dashboard/agente-ia" component={AgenteIA} />
       <Route path="/dashboard/configuracoes" component={Configuracoes} />
@@ -63,11 +68,13 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="degusta-theme">
         <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner position="top-right" richColors closeButton />
-            <Router />
-          </TooltipProvider>
+          <TenantProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner position="top-right" richColors closeButton />
+              <Router />
+            </TooltipProvider>
+          </TenantProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

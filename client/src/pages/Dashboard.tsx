@@ -1,6 +1,8 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/lib/tenant-context";
+import { buildApiUrl } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { DollarSign, ShoppingBag, Receipt, Package, TrendingUp, Clock, CheckCircle2 } from "lucide-react";
 import KPICard, { KPIGrid } from "@/components/KPICard";
@@ -49,13 +51,17 @@ interface Pedido {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
-  const hasTenant = !!user?.tenantId;
+  const { user, isSuperAdmin } = useAuth();
+  const { selectedTenantId } = useTenant();
+  
+  const effectiveTenantId = isSuperAdmin ? selectedTenantId : null;
+  const hasTenant = isSuperAdmin ? !!selectedTenantId : !!user?.tenantId;
 
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
-    queryKey: ["dashboard-stats"],
+    queryKey: ["dashboard-stats", effectiveTenantId],
     queryFn: async () => {
-      const res = await fetch(`/api/analytics/dashboard-stats`, { credentials: "include" });
+      const url = buildApiUrl("/api/analytics/dashboard-stats", effectiveTenantId);
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch stats");
       return res.json();
     },
@@ -64,9 +70,10 @@ export default function Dashboard() {
   });
 
   const { data: pedidos = [] } = useQuery<Pedido[]>({
-    queryKey: ["pedidos"],
+    queryKey: ["pedidos", effectiveTenantId],
     queryFn: async () => {
-      const res = await fetch(`/api/pedidos`, { credentials: "include" });
+      const url = buildApiUrl("/api/pedidos", effectiveTenantId);
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -74,9 +81,10 @@ export default function Dashboard() {
   });
 
   const { data: dailySales = [] } = useQuery<DailySale[]>({
-    queryKey: ["analytics", "daily-sales-30"],
+    queryKey: ["analytics", "daily-sales-30", effectiveTenantId],
     queryFn: async () => {
-      const res = await fetch(`/api/analytics/daily-sales?days=30`, { credentials: "include" });
+      const url = buildApiUrl("/api/analytics/daily-sales?days=30", effectiveTenantId);
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -84,9 +92,10 @@ export default function Dashboard() {
   });
 
   const { data: topItems = [] } = useQuery<TopItem[]>({
-    queryKey: ["analytics", "top-items"],
+    queryKey: ["analytics", "top-items", effectiveTenantId],
     queryFn: async () => {
-      const res = await fetch(`/api/analytics/top-items?limit=10`, { credentials: "include" });
+      const url = buildApiUrl("/api/analytics/top-items?limit=10", effectiveTenantId);
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },

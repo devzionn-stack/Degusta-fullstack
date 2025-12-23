@@ -66,10 +66,33 @@ export async function loadUser(req: Request, res: Response, next: NextFunction) 
 }
 
 export function requireTenant(req: Request, res: Response, next: NextFunction) {
+  // Super admin can access any tenant by providing tenantId in query or header
+  if (req.user?.role === "super_admin") {
+    const tenantIdFromQuery = req.query.tenantId as string | undefined;
+    const tenantIdFromHeader = req.headers["x-tenant-id"] as string | undefined;
+    const effectiveTenantId = tenantIdFromQuery || tenantIdFromHeader;
+    
+    if (effectiveTenantId) {
+      // Override tenantId for super admin
+      (req.user as any).effectiveTenantId = effectiveTenantId;
+      return next();
+    }
+    // If super admin doesn't provide tenantId, return error
+    return res.status(403).json({ error: "Super admin deve selecionar uma franquia" });
+  }
+  
   if (!req.user?.tenantId) {
     return res.status(403).json({ error: "Nenhum tenant associado ao usuário" });
   }
+  
+  // For regular users, set effectiveTenantId to their own tenantId
+  (req.user as any).effectiveTenantId = req.user.tenantId;
   next();
+}
+
+// Helper to get effective tenant ID (works for both super admin and regular users)
+export function getEffectiveTenantId(req: Request): string {
+  return (req.user as any)?.effectiveTenantId || req.user?.tenantId || "";
 }
 
 export function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {

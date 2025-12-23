@@ -1,10 +1,12 @@
 import { ReactNode, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/lib/tenant-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Menu, X, Bell, AlertTriangle, Info, AlertCircle } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import Sidebar from "@/components/Sidebar";
+import TenantSelector from "@/components/TenantSelector";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -35,30 +37,39 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [, navigate] = useLocation();
-  const { isLoading, isAuthenticated, user } = useAuth();
+  const { isLoading, isAuthenticated, user, isSuperAdmin } = useAuth();
+  const { selectedTenantId } = useTenant();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const queryClient = useQueryClient();
 
+  const effectiveTenantId = isSuperAdmin ? selectedTenantId : user?.tenantId;
+
   const { data: alertas = [] } = useQuery<Alerta[]>({
-    queryKey: ["alertas"],
+    queryKey: ["alertas", effectiveTenantId],
     queryFn: async () => {
-      const res = await fetch("/api/alertas?limit=10", { credentials: "include" });
+      const url = isSuperAdmin && selectedTenantId 
+        ? `/api/alertas?limit=10&tenantId=${selectedTenantId}`
+        : "/api/alertas?limit=10";
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: isAuthenticated && !!user?.tenantId,
+    enabled: isAuthenticated && !!effectiveTenantId,
     refetchInterval: 30000,
   });
 
   const { data: unreadCount = 0 } = useQuery<number>({
-    queryKey: ["alertas", "nao-lidos"],
+    queryKey: ["alertas", "nao-lidos", effectiveTenantId],
     queryFn: async () => {
-      const res = await fetch("/api/alertas/nao-lidos", { credentials: "include" });
+      const url = isSuperAdmin && selectedTenantId
+        ? `/api/alertas/nao-lidos?tenantId=${selectedTenantId}`
+        : "/api/alertas/nao-lidos";
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) return 0;
       const data = await res.json();
       return data.count;
     },
-    enabled: isAuthenticated && !!user?.tenantId,
+    enabled: isAuthenticated && !!effectiveTenantId,
     refetchInterval: 30000,
   });
 
@@ -118,7 +129,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
           
-          <div className="flex-1" />
+          <div className="flex items-center gap-4 flex-1">
+            <TenantSelector />
+          </div>
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
