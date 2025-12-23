@@ -11,13 +11,11 @@ import {
   Shield, 
   BarChart3,
   Flame,
-  Users,
   Target,
   TrendingUp,
   Building2,
   Code2,
-  Megaphone,
-  Settings
+  Megaphone
 } from "lucide-react";
 
 export default function Home() {
@@ -66,7 +64,8 @@ export default function Home() {
             </h1>
             
             <p className="text-xl md:text-2xl text-muted-foreground mb-6 max-w-3xl mx-auto leading-relaxed">
-              Se você chegou até aqui, saiba: você não está entrando apenas em um painel.
+              Se você chegou até aqui, saiba:<br />
+              você não está entrando apenas em um painel.
             </p>
             
             <p className="text-lg text-foreground font-medium mb-10 max-w-2xl mx-auto">
@@ -76,37 +75,30 @@ export default function Home() {
               <span className="text-primary">dominar</span> seu espaço.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left max-w-3xl mx-auto mb-12">
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border">
+                <span className="text-2xl">🔥</span>
+                <p className="font-semibold text-foreground">Onde gestão encontra tecnologia.</p>
+              </div>
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border">
+                <span className="text-2xl">🔥</span>
+                <p className="font-semibold text-foreground">Onde visão vira processo.</p>
+              </div>
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border">
+                <span className="text-2xl">🔥</span>
+                <p className="font-semibold text-foreground">Onde cada decisão constrói expansão.</p>
+              </div>
+            </div>
+
+            <p className="text-2xl font-bold text-primary mb-10">Bem-vindo.</p>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/login">
                 <Button size="lg" className="text-lg px-8 h-14 shadow-lg shadow-primary/25" data-testid="button-cta-hero">
                   Acessar Sistema
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left max-w-3xl mx-auto">
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border">
-                <Flame className="w-6 h-6 text-primary shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-foreground">Gestão encontra Tecnologia</p>
-                  <p className="text-sm text-muted-foreground">Decisões inteligentes em tempo real</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border">
-                <Target className="w-6 h-6 text-primary shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-foreground">Visão vira Processo</p>
-                  <p className="text-sm text-muted-foreground">Da estratégia à execução</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border">
-                <TrendingUp className="w-6 h-6 text-primary shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-foreground">Decisão constrói Expansão</p>
-                  <p className="text-sm text-muted-foreground">Crescimento previsível</p>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -117,7 +109,7 @@ export default function Home() {
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-12">
               <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary mb-6">
-                <Flame className="w-4 h-4" />
+                <span className="text-lg">🍕</span>
                 Nossa História
               </div>
               <h2 className="text-3xl md:text-4xl font-bold mb-4">
@@ -126,9 +118,10 @@ export default function Home() {
               </h2>
             </div>
 
-            <div className="prose prose-lg dark:prose-invert mx-auto">
+            <div className="prose prose-lg dark:prose-invert mx-auto text-left">
               <p className="text-lg text-muted-foreground leading-relaxed mb-6">
-                Alguns negócios nascem de uma receita. Outros nascem de uma <strong className="text-foreground">decisão</strong>.
+                Alguns negócios nascem de uma receita.<br />
+                Outros nascem de uma <strong className="text-foreground">decisão</strong>.
               </p>
               
               <p className="text-lg text-muted-foreground leading-relaxed mb-6">
@@ -138,7 +131,7 @@ export default function Home() {
               </p>
 
               <blockquote className="text-2xl font-bold text-primary border-l-4 border-primary pl-6 my-8">
-                "Crescimento não aceita improviso."
+                Crescimento não aceita improviso.
               </blockquote>
 
               <p className="text-lg text-muted-foreground leading-relaxed mb-6">
@@ -148,26 +141,33 @@ export default function Home() {
               </p>
 
               <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-                Mas havia um novo desafio: <strong className="text-foreground">Criar uma pizzaria nascida para escalar, 
-                não para apenas sobreviver.</strong>
+                Mas havia um novo desafio.
+              </p>
+              
+              <p className="text-lg text-foreground font-semibold leading-relaxed mb-8">
+                Criar uma pizzaria nascida para escalar, não para apenas sobreviver.
+              </p>
+
+              <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+                Uma operação que unisse:
               </p>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-8">
                 <div className="text-center p-4 rounded-xl bg-background border">
-                  <Flame className="w-8 h-8 text-primary mx-auto mb-2" />
+                  <span className="text-3xl mb-2 block">🔥</span>
                   <p className="font-semibold">Produto forte</p>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-background border">
-                  <Settings className="w-8 h-8 text-primary mx-auto mb-2" />
+                  <span className="text-3xl mb-2 block">🧠</span>
                   <p className="font-semibold">Gestão inteligente</p>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-background border">
-                  <Code2 className="w-8 h-8 text-primary mx-auto mb-2" />
-                  <p className="font-semibold">Tecnologia própria</p>
+                  <span className="text-3xl mb-2 block">💻</span>
+                  <p className="font-semibold">Tecnologia proprietária</p>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-background border">
-                  <TrendingUp className="w-8 h-8 text-primary mx-auto mb-2" />
-                  <p className="font-semibold">Expansão controlada</p>
+                  <span className="text-3xl mb-2 block">🚀</span>
+                  <p className="font-semibold">Expansão agressiva e controlada</p>
                 </div>
               </div>
 
@@ -184,7 +184,7 @@ export default function Home() {
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-16">
               <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary mb-6">
-                <Users className="w-4 h-4" />
+                <span className="text-lg">👥</span>
                 Equipe
               </div>
               <h2 className="text-3xl md:text-4xl font-bold mb-4">
