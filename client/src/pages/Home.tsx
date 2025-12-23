@@ -10,7 +10,14 @@ import {
   Zap, 
   Shield, 
   BarChart3,
-  Flame
+  Flame,
+  Users,
+  Target,
+  TrendingUp,
+  Building2,
+  Code2,
+  Megaphone,
+  Settings
 } from "lucide-react";
 
 export default function Home() {
@@ -19,12 +26,23 @@ export default function Home() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Logo size="md" />
-          <Link href="/login">
-            <Button data-testid="button-login-header">
-              Acessar Sistema
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </Link>
+          <div className="flex items-center gap-4">
+            <a href="#sobre" className="text-sm font-medium text-muted-foreground hover:text-foreground transition hidden md:block">
+              Sobre Nós
+            </a>
+            <a href="#fundadores" className="text-sm font-medium text-muted-foreground hover:text-foreground transition hidden md:block">
+              Fundadores
+            </a>
+            <a href="#vantagens" className="text-sm font-medium text-muted-foreground hover:text-foreground transition hidden md:block">
+              Vantagens
+            </a>
+            <Link href="/login">
+              <Button data-testid="button-login-header">
+                Acessar Sistema
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -37,65 +55,266 @@ export default function Home() {
           <div className="max-w-4xl mx-auto text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary mb-8">
               <Flame className="w-4 h-4" />
-              Plataforma Multi-Tenancy
+              Centro de Comando
             </div>
             
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 leading-tight">
-              Gestão de Franquias de{" "}
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-tight">
+              Bem-vindo ao{" "}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-primary">
-                Pizzaria 5.0
-              </span>
-              <br />
-              <span className="text-3xl md:text-4xl lg:text-5xl font-semibold text-muted-foreground">
-                Otimização Preditiva e IA
+                Sistema
               </span>
             </h1>
             
-            <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-              A plataforma Multi-Tenancy que transforma sua rede em uma 
-              <span className="text-foreground font-medium"> operação de alta performance</span>. 
-              Integração completa de KDS, Logística e Inteligência Artificial.
+            <p className="text-xl md:text-2xl text-muted-foreground mb-6 max-w-3xl mx-auto leading-relaxed">
+              Se você chegou até aqui, saiba: você não está entrando apenas em um painel.
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <p className="text-lg text-foreground font-medium mb-10 max-w-2xl mx-auto">
+              Está acessando o centro de comando de uma operação que nasceu para{" "}
+              <span className="text-primary">crescer</span>,{" "}
+              <span className="text-primary">resistir</span> e{" "}
+              <span className="text-primary">dominar</span> seu espaço.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
               <Link href="/login">
                 <Button size="lg" className="text-lg px-8 h-14 shadow-lg shadow-primary/25" data-testid="button-cta-hero">
                   Acessar Sistema
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="text-lg px-8 h-14" data-testid="button-demo">
-                Solicitar Demo
-              </Button>
             </div>
 
-            <div className="mt-16 flex flex-wrap justify-center gap-8 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-primary" />
-                <span>Dados Isolados por Franquia</span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left max-w-3xl mx-auto">
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border">
+                <Flame className="w-6 h-6 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-foreground">Gestão encontra Tecnologia</p>
+                  <p className="text-sm text-muted-foreground">Decisões inteligentes em tempo real</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Zap className="w-5 h-5 text-secondary" />
-                <span>Tempo Real</span>
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border">
+                <Target className="w-6 h-6 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-foreground">Visão vira Processo</p>
+                  <p className="text-sm text-muted-foreground">Da estratégia à execução</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-accent" />
-                <span>Analytics Avançado</span>
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border">
+                <TrendingUp className="w-6 h-6 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-foreground">Decisão constrói Expansão</p>
+                  <p className="text-sm text-muted-foreground">Crescimento previsível</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="py-24 bg-muted/30">
+      <section id="sobre" className="py-24 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary mb-6">
+                <Flame className="w-4 h-4" />
+                Nossa História
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                Onde a Visão Encontra o{" "}
+                <span className="text-primary">Fogo</span>
+              </h2>
+            </div>
+
+            <div className="prose prose-lg dark:prose-invert mx-auto">
+              <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+                Alguns negócios nascem de uma receita. Outros nascem de uma <strong className="text-foreground">decisão</strong>.
+              </p>
+              
+              <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+                Esta pizzaria não começou em um forno — começou em uma madrugada, quando um empresário, 
+                pai de família, doutor em Odontologia, fundador de uma das maiores clínicas odontológicas 
+                de São Paulo e dono de laboratório próprio, percebeu algo simples:
+              </p>
+
+              <blockquote className="text-2xl font-bold text-primary border-l-4 border-primary pl-6 my-8">
+                "Crescimento não aceita improviso."
+              </blockquote>
+
+              <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+                Formado em Administração, Contabilidade e Odontologia, ele construiu sua trajetória 
+                unindo ciência, gestão e execução extrema. Clínicas, laboratórios, equipes, processos. 
+                Tudo precisava funcionar como um sistema vivo, preciso e escalável.
+              </p>
+
+              <p className="text-lg text-muted-foreground leading-relaxed mb-8">
+                Mas havia um novo desafio: <strong className="text-foreground">Criar uma pizzaria nascida para escalar, 
+                não para apenas sobreviver.</strong>
+              </p>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-8">
+                <div className="text-center p-4 rounded-xl bg-background border">
+                  <Flame className="w-8 h-8 text-primary mx-auto mb-2" />
+                  <p className="font-semibold">Produto forte</p>
+                </div>
+                <div className="text-center p-4 rounded-xl bg-background border">
+                  <Settings className="w-8 h-8 text-primary mx-auto mb-2" />
+                  <p className="font-semibold">Gestão inteligente</p>
+                </div>
+                <div className="text-center p-4 rounded-xl bg-background border">
+                  <Code2 className="w-8 h-8 text-primary mx-auto mb-2" />
+                  <p className="font-semibold">Tecnologia própria</p>
+                </div>
+                <div className="text-center p-4 rounded-xl bg-background border">
+                  <TrendingUp className="w-8 h-8 text-primary mx-auto mb-2" />
+                  <p className="font-semibold">Expansão controlada</p>
+                </div>
+              </div>
+
+              <p className="text-xl text-center font-semibold text-foreground">
+                Foi então que quatro mentes se alinharam.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="fundadores" className="py-24 bg-background">
+        <div className="container mx-auto px-4">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-16">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary mb-6">
+                <Users className="w-4 h-4" />
+                Equipe
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                Quatro Pilares.{" "}
+                <span className="text-primary">Um Sistema.</span>
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-2 hover:border-primary/50">
+                <CardContent className="p-8">
+                  <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+                    <Building2 className="w-8 h-8 text-primary" />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-2">Gustavo</h3>
+                  <p className="text-primary font-medium mb-4">Sistema Franqueador</p>
+                  <p className="text-muted-foreground">
+                    Assumiu o coração da operação: o sistema franqueador, os fluxos, o operacional 
+                    que garante que cada unidade funcione como a primeira — ou melhor.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-2 hover:border-secondary/50">
+                <CardContent className="p-8">
+                  <div className="w-16 h-16 bg-secondary/10 rounded-full flex items-center justify-center mb-6">
+                    <Code2 className="w-8 h-8 text-secondary" />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-2">Rafael e Felipe</h3>
+                  <p className="text-secondary font-medium mb-4">Engenheiros de Software</p>
+                  <p className="text-muted-foreground">
+                    Construíram o que não se compra pronto: um sistema de gestão próprio, 
+                    com inteligência de decisão, proteção cibernética e visão estratégica em tempo real.
+                    <span className="block mt-2 font-medium text-foreground">Aqui, dados não dormem. Eles decidem.</span>
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-2 hover:border-accent/50 md:col-span-2 md:max-w-md md:mx-auto">
+                <CardContent className="p-8">
+                  <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-6">
+                    <Megaphone className="w-8 h-8 text-amber-600" />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-2">Davi</h3>
+                  <p className="text-amber-600 font-medium mb-4">Gestor de Tráfego</p>
+                  <p className="text-muted-foreground">
+                    Levou a marca para onde o público está: transformando atenção em demanda, 
+                    cliques em pedidos e dados em crescimento previsível.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="text-center mt-12 p-8 rounded-2xl bg-muted/50 border">
+              <p className="text-xl md:text-2xl font-semibold text-foreground">
+                Quatro áreas. Quatro responsabilidades.{" "}
+                <span className="text-primary">Um único objetivo: escala com controle.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-24 bg-gradient-to-b from-muted/30 to-background">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-3xl md:text-4xl font-bold mb-6">
+              Não é Sobre Pizza.{" "}
+              <span className="text-primary">É Sobre Expansão.</span>
+            </h2>
+            
+            <p className="text-lg text-muted-foreground mb-12 max-w-2xl mx-auto">
+              Cada pizza que sai do forno carrega mais do que sabor.
+              Carrega processo, tecnologia, método e visão de longo prazo.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
+              <div className="p-6 rounded-xl bg-background border hover:border-primary/50 transition">
+                <Building2 className="w-8 h-8 text-primary mb-4" />
+                <h4 className="font-bold mb-2">Operar como franquia</h4>
+                <p className="text-sm text-muted-foreground">Sistema pronto para replicar em novas unidades</p>
+              </div>
+              <div className="p-6 rounded-xl bg-background border hover:border-primary/50 transition">
+                <BarChart3 className="w-8 h-8 text-primary mb-4" />
+                <h4 className="font-bold mb-2">Crescer com previsibilidade</h4>
+                <p className="text-sm text-muted-foreground">Métricas claras para tomar decisões seguras</p>
+              </div>
+              <div className="p-6 rounded-xl bg-background border hover:border-primary/50 transition">
+                <Target className="w-8 h-8 text-primary mb-4" />
+                <h4 className="font-bold mb-2">Decisões baseadas em dados</h4>
+                <p className="text-sm text-muted-foreground">Informação organizada para agir com confiança</p>
+              </div>
+              <div className="p-6 rounded-xl bg-background border hover:border-primary/50 transition">
+                <Shield className="w-8 h-8 text-primary mb-4" />
+                <h4 className="font-bold mb-2">Proteger informação e marca</h4>
+                <p className="text-sm text-muted-foreground">Segurança para seus dados e receitas</p>
+              </div>
+              <div className="p-6 rounded-xl bg-background border hover:border-primary/50 transition">
+                <TrendingUp className="w-8 h-8 text-primary mb-4" />
+                <h4 className="font-bold mb-2">Expansão sem perder qualidade</h4>
+                <p className="text-sm text-muted-foreground">Crescer mantendo o padrão que funciona</p>
+              </div>
+              <div className="p-6 rounded-xl bg-background border hover:border-primary/50 transition">
+                <Zap className="w-8 h-8 text-primary mb-4" />
+                <h4 className="font-bold mb-2">Agilidade operacional</h4>
+                <p className="text-sm text-muted-foreground">Menos tempo no problema, mais tempo vendendo</p>
+              </div>
+            </div>
+
+            <div className="mt-12 p-8 rounded-2xl bg-primary/5 border border-primary/20">
+              <p className="text-lg text-muted-foreground mb-2">
+                Enquanto muitos abrem portas, nós <strong className="text-foreground">abrimos sistemas</strong>.
+              </p>
+              <p className="text-xl font-semibold text-primary">
+                Enquanto alguns vendem hoje, nós construímos cadeias de amanhã.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="vantagens" className="py-24 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Funcionalidades que{" "}
-              <span className="text-primary">Transformam</span> sua Operação
+              O que você ganha com a{" "}
+              <span className="text-primary">plataforma</span>
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Tecnologia de ponta para maximizar eficiência, reduzir custos e encantar clientes
+              Ferramentas simples de usar que fazem a diferença no dia a dia da sua operação
             </p>
           </div>
 
@@ -106,23 +325,23 @@ export default function Home() {
                 <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                   <ChefHat className="h-7 w-7 text-primary" />
                 </div>
-                <h3 className="text-xl font-bold mb-3">KDS Inteligente</h3>
+                <h3 className="text-xl font-bold mb-3">Cozinha Organizada</h3>
                 <p className="text-muted-foreground mb-4">
-                  Sistema de Display para Cozinha com looping de produção, 
-                  tempo dinâmico de preparo (DPT) e otimização de fila baseada em IA.
+                  Uma tela que mostra todos os pedidos em ordem, com tempo de preparo e alertas 
+                  para ninguém perder a hora. A cozinha sabe exatamente o que fazer.
                 </p>
                 <ul className="space-y-2 text-sm">
                   <li className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Controle de etapas de produção
+                    Pedidos organizados por prioridade
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Alertas sonoros e visuais
+                    Aviso sonoro quando atrasar
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Machine Learning para tempos
+                    Tempo estimado automático
                   </li>
                 </ul>
               </CardContent>
@@ -134,23 +353,23 @@ export default function Home() {
                 <div className="w-14 h-14 bg-secondary/10 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                   <MapPin className="h-7 w-7 text-secondary" />
                 </div>
-                <h3 className="text-xl font-bold mb-3">Logística Geo-IA</h3>
+                <h3 className="text-xl font-bold mb-3">Entregas Sob Controle</h3>
                 <p className="text-muted-foreground mb-4">
-                  Rastreamento em tempo real, ETA preditivo com tráfego, 
-                  geofencing automático e alertas proativos ao cliente.
+                  Veja onde cada motoboy está no mapa. O sistema escolhe o melhor entregador 
+                  e avisa o cliente automaticamente quando a pizza está chegando.
                 </p>
                 <ul className="space-y-2 text-sm">
                   <li className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-secondary" />
-                    Google Maps integrado
+                    Mapa em tempo real
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-secondary" />
-                    Seleção ótima de motoboy
+                    Escolhe o entregador mais próximo
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-secondary" />
-                    WhatsApp automático
+                    Cliente recebe aviso no WhatsApp
                   </li>
                 </ul>
               </CardContent>
@@ -162,23 +381,23 @@ export default function Home() {
                 <div className="w-14 h-14 bg-accent/20 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                   <MessageSquareText className="h-7 w-7 text-amber-600" />
                 </div>
-                <h3 className="text-xl font-bold mb-3">Agente de Dados Conversacional</h3>
+                <h3 className="text-xl font-bold mb-3">Assistente Inteligente</h3>
                 <p className="text-muted-foreground mb-4">
-                  Assistente de IA que responde perguntas sobre sua operação, 
-                  executa ações e fornece insights em linguagem natural.
+                  Pergunte qualquer coisa sobre sua loja em linguagem simples. 
+                  "Quanto vendemos hoje?" ou "Qual ingrediente está acabando?" — ele responde na hora.
                 </p>
                 <ul className="space-y-2 text-sm">
                   <li className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    Consultas financeiras
+                    Responde perguntas sobre vendas
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    Gestão de estoque por voz
+                    Avisa sobre estoque baixo
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    Relatórios instantâneos
+                    Gera relatórios na hora
                   </li>
                 </ul>
               </CardContent>
@@ -193,7 +412,7 @@ export default function Home() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
               <div>
                 <div className="text-4xl md:text-5xl font-bold text-primary mb-2">99.9%</div>
-                <div className="text-sm text-muted-foreground">Uptime Garantido</div>
+                <div className="text-sm text-muted-foreground">Sistema Sempre Online</div>
               </div>
               <div>
                 <div className="text-4xl md:text-5xl font-bold text-secondary mb-2">-40%</div>
@@ -201,11 +420,11 @@ export default function Home() {
               </div>
               <div>
                 <div className="text-4xl md:text-5xl font-bold text-primary mb-2">+25%</div>
-                <div className="text-sm text-muted-foreground">Satisfação Cliente</div>
+                <div className="text-sm text-muted-foreground">Clientes Satisfeitos</div>
               </div>
               <div>
                 <div className="text-4xl md:text-5xl font-bold text-secondary mb-2">24/7</div>
-                <div className="text-sm text-muted-foreground">Monitoramento IA</div>
+                <div className="text-sm text-muted-foreground">Suporte Disponível</div>
               </div>
             </div>
           </div>
@@ -215,10 +434,10 @@ export default function Home() {
       <section className="py-24 bg-primary text-primary-foreground">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Pronto para Revolucionar sua Rede?
+            Pronto para entrar no Sistema?
           </h2>
           <p className="text-lg opacity-90 mb-8 max-w-xl mx-auto">
-            Junte-se às pizzarias que já operam com inteligência artificial e automação de ponta
+            Acesse agora e comece a gerenciar sua operação com as ferramentas certas
           </p>
           <Link href="/login">
             <Button 
@@ -227,7 +446,7 @@ export default function Home() {
               className="text-lg px-8 h-14"
               data-testid="button-cta-footer"
             >
-              Começar Agora
+              Acessar Sistema
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </Link>

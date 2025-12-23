@@ -47,9 +47,12 @@ export default function Login() {
             <Pizza className="w-8 h-8 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-3xl font-serif">Bella Napoli</CardTitle>
+            <CardTitle className="text-3xl font-bold">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Degusta</span>{" "}
+              <span>Pizzas</span>
+            </CardTitle>
             <CardDescription className="text-base mt-2">
-              Entre na sua conta para gerenciar sua pizzaria
+              Acesse o centro de comando da sua operação
             </CardDescription>
           </div>
         </CardHeader>

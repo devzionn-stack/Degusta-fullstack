@@ -31,7 +31,7 @@ export default function AgenteIA() {
       id: "welcome",
       role: "assistant",
       content:
-        "Olá! Sou o assistente de IA da Bella Napoli. Posso ajudar você a consultar dados financeiros, verificar estoque, monitorar entregas e muito mais. O que você gostaria de saber?",
+        "Olá! Sou o assistente inteligente da Degusta Pizzas. Estou aqui para facilitar sua gestão - basta perguntar em linguagem simples! Posso te ajudar com: vendas do dia, estoque baixo, entregas em andamento, ou qualquer dúvida sobre sua operação. Como posso ajudar?",
       timestamp: new Date(),
     },
   ]);
@@ -151,8 +151,11 @@ export default function AgenteIA() {
           <CardHeader className="flex-shrink-0 border-b">
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              Agente de IA - Assistente Bella Napoli
+              Assistente Inteligente Degusta
             </CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Pergunte sobre vendas, estoque, entregas ou qualquer dúvida da sua operação
+            </p>
           </CardHeader>
           <CardContent className="flex flex-col flex-1 p-0">
             <ScrollArea
@@ -243,7 +246,7 @@ export default function AgenteIA() {
                   ref={inputRef}
                   value={mensagem}
                   onChange={(e) => setMensagem(e.target.value)}
-                  placeholder="Digite sua pergunta ou comando..."
+                  placeholder="Ex: Quanto vendemos hoje? / Qual ingrediente está acabando?"
                   disabled={chatMutation.isPending}
                   data-testid="input-message"
                   className="flex-1"
