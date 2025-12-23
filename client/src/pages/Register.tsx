@@ -1,19 +1,12 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Pizza, Loader2, ArrowLeft } from "lucide-react";
+import { Pizza, Loader2, ArrowLeft, Store, User, Mail, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface Tenant {
-  id: string;
-  nome: string;
-}
 
 export default function Register() {
   const [, navigate] = useLocation();
@@ -22,19 +15,10 @@ export default function Register() {
   
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
+  const [nomeFranquia, setNomeFranquia] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [tenantId, setTenantId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
-
-  const { data: tenants = [] } = useQuery<Tenant[]>({
-    queryKey: ["tenants"],
-    queryFn: async () => {
-      const res = await fetch("/api/tenants");
-      if (!res.ok) throw new Error("Erro ao buscar franquias");
-      return res.json();
-    },
-  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,13 +41,22 @@ export default function Register() {
       return;
     }
 
+    if (nomeFranquia.length < 2) {
+      toast({
+        variant: "destructive",
+        title: "Nome da franquia inválido",
+        description: "O nome da franquia deve ter pelo menos 2 caracteres",
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      await register(email, password, nome, tenantId || undefined);
+      await register(email, password, nome, nomeFranquia);
       toast({
-        title: "Conta criada!",
-        description: "Bem-vindo ao Bella Napoli!",
+        title: "Franquia criada com sucesso!",
+        description: "Bem-vindo à Degusta Pizzas!",
       });
       navigate("/dashboard");
     } catch (error) {
@@ -79,27 +72,30 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-xl">
-        <CardHeader className="text-center space-y-4">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="absolute left-4 top-4"
-            onClick={() => navigate("/login")}
-            data-testid="button-back"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Voltar
-          </Button>
-          
+      <Card className="w-full max-w-md shadow-xl relative">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="absolute left-4 top-4 z-10"
+          onClick={() => navigate("/login")}
+          data-testid="button-back"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Voltar
+        </Button>
+        
+        <CardHeader className="text-center space-y-4 pt-12">
           <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
             <Pizza className="w-8 h-8 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-3xl font-serif">Criar Conta</CardTitle>
+            <CardTitle className="text-3xl font-bold">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Cadastrar</span>{" "}
+              <span>Franquia</span>
+            </CardTitle>
             <CardDescription className="text-base mt-2">
-              Junte-se à família Bella Napoli
+              Crie sua conta e comece a gerenciar sua pizzaria
             </CardDescription>
           </div>
         </CardHeader>
@@ -107,7 +103,34 @@ export default function Register() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="nome">Nome completo</Label>
+              <Label htmlFor="nomeFranquia" className="flex items-center gap-2">
+                <Store className="w-4 h-4 text-muted-foreground" />
+                Nome da Franquia
+              </Label>
+              <Input
+                id="nomeFranquia"
+                type="text"
+                placeholder="Ex: Degusta Pizzas - Centro"
+                value={nomeFranquia}
+                onChange={(e) => setNomeFranquia(e.target.value)}
+                required
+                data-testid="input-nome-franquia"
+                className="h-11"
+              />
+              <p className="text-xs text-muted-foreground">
+                Este será o nome da sua unidade no sistema
+              </p>
+            </div>
+
+            <div className="border-t pt-4">
+              <p className="text-sm font-medium text-muted-foreground mb-3">Dados do Administrador</p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="nome" className="flex items-center gap-2">
+                <User className="w-4 h-4 text-muted-foreground" />
+                Seu Nome Completo
+              </Label>
               <Input
                 id="nome"
                 type="text"
@@ -121,7 +144,10 @@ export default function Register() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-muted-foreground" />
+                Email
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -135,24 +161,10 @@ export default function Register() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="tenant">Franquia (opcional)</Label>
-              <Select value={tenantId} onValueChange={setTenantId}>
-                <SelectTrigger className="h-11" data-testid="select-tenant">
-                  <SelectValue placeholder="Selecione uma franquia" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Nenhuma franquia</SelectItem>
-                  {tenants.map((tenant) => (
-                    <SelectItem key={tenant.id} value={tenant.id}>
-                      {tenant.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+              <Label htmlFor="password" className="flex items-center gap-2">
+                <Lock className="w-4 h-4 text-muted-foreground" />
+                Senha
+              </Label>
               <Input
                 id="password"
                 type="password"
@@ -166,7 +178,10 @@ export default function Register() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar senha</Label>
+              <Label htmlFor="confirmPassword" className="flex items-center gap-2">
+                <Lock className="w-4 h-4 text-muted-foreground" />
+                Confirmar Senha
+              </Label>
               <Input
                 id="confirmPassword"
                 type="password"
@@ -190,10 +205,10 @@ export default function Register() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Criando conta...
+                  Criando franquia...
                 </>
               ) : (
-                "Criar conta"
+                "Criar Minha Franquia"
               )}
             </Button>
             

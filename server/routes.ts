@@ -67,27 +67,27 @@ export async function registerRoutes(
         });
       }
 
-      const { email, password, nome, tenantId } = validation.data;
+      const { email, password, nome, nomeFranquia } = validation.data;
       
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
         return res.status(400).json({ error: "Email já cadastrado" });
       }
 
-      if (tenantId) {
-        const tenant = await storage.getTenant(tenantId);
-        if (!tenant) {
-          return res.status(400).json({ error: "Franquia não encontrada" });
-        }
-      }
+      // Create new tenant (franchise) for this registration
+      const newTenant = await storage.createTenant({
+        nome: nomeFranquia,
+        status: 'active',
+      });
 
       const hashedPassword = await hashPassword(password);
+      // Create user as tenant_admin for their own franchise
       const user = await storage.createUser({
         email,
         password: hashedPassword,
         nome,
-        tenantId: tenantId || null,
-        role: "user",
+        tenantId: newTenant.id,
+        role: "tenant_admin",
       });
 
       await regenerateSession(req);
