@@ -1,0 +1,281 @@
+OBJETIVO GERAL
+
+Você é uma I.A Desenvolvedora Sênior Full Stack, responsável por planejar e implementar um sistema completo de KDS (Kitchen Display System) para uma pizzaria já existente.
+
+O sistema JÁ POSSUI aba de cozinha no sistema interno, com estados:
+
+Recebidos
+
+Em preparo
+
+Prontos
+
+Porém NÃO EXISTE ainda:
+
+Interface de KDS para televisão / display grande
+
+Sistema de IA guiando o preparo
+
+Sistema de timing por etapas
+
+Alertas sonoros
+
+Botões de avanço por etapa
+
+Gatilhos automáticos com webhooks e WhatsApp
+
+Estrutura de banco preparada para produção em tempo real
+
+Sua missão é CRIAR O PLANO TÉCNICO E A IMPLEMENTAÇÃO BASE disso tudo.
+
+🧠 CONTEXTO OPERACIONAL REAL
+
+O KDS será exibido em TV ou monitor grande na cozinha
+
+Deve funcionar via:
+
+Navegador (Chrome/Edge)
+
+Cabo HDMI + computador simples / mini PC / notebook
+
+Sem necessidade de hardware proprietário
+
+Deve ser fácil de aprender e executar por qualquer pizzaria pequena/média
+
+🍕 FUNCIONALIDADES OBRIGATÓRIAS DO KDS
+1️⃣ TELA DE KDS PARA TELEVISÃO (FRONTEND)
+
+Criar uma nova aba / rota específica para KDS:
+
+Layout em grid grande (legível à distância)
+
+Cards grandes de pedidos
+
+Cores por estado:
+
+Recebido
+
+Em preparo
+
+Pronto
+
+Atualização em tempo real (WebSocket ou polling)
+
+Sem necessidade de login complexo (modo cozinha)
+
+2️⃣ IA GUIANDO O PREPARO EM TEMPO REAL (TEXTO)
+
+Para cada pizza no pedido:
+
+A IA deve:
+
+Mostrar instruções passo a passo
+
+Dividir o preparo em ETAPAS CRONOMETRADAS, por exemplo:
+
+Abrir massa
+
+Molho
+
+Ingredientes
+
+Forno
+
+Finalização
+
+Cada etapa deve ter:
+
+Texto claro e curto
+
+Tempo estimado
+
+Botão “Etapa concluída”
+
+3️⃣ BOTÕES DE ETAPA + ALERTA SONORO
+
+Cada etapa possui um botão
+
+Ao clicar:
+
+Avança a etapa
+
+Dispara alerta sonoro configurável
+
+Registra timestamp no banco
+
+Ao finalizar última etapa:
+
+Pizza passa para PRONTA
+
+Dispara gatilhos (WhatsApp / Webhook)
+
+4️⃣ ESTRUTURA DE DADOS (BANCO DE DADOS)
+
+Criar ou ajustar tabelas para:
+
+📦 Pizzas / Produtos
+
+ID
+
+Nome
+
+Categoria
+
+Ingredientes (lista)
+
+Tipo (salgada/doce)
+
+Tempo médio de preparo
+
+Etapas padrão
+
+Todas as pizzas abaixo DEVEM ser cadastradas no banco e previstas no KDS (ver lista ao final).
+
+🔄 Produção / KDS
+
+Pedido ID
+
+Cliente nome
+
+Cliente telefone
+
+Pizza ID
+
+Status atual
+
+Etapa atual
+
+Tempo por etapa
+
+Horário de início
+
+Horário de conclusão
+
+🔔 Alertas / Gatilhos
+
+Tipo de alerta
+
+Texto gerado
+
+Destino (WhatsApp / Webhook)
+
+Payload enviado
+
+Status de envio
+
+5️⃣ WEBHOOKS E ALERTAS AUTOMÁTICOS
+
+Criar uma aba de Configuração de Alertas, onde o usuário pode:
+
+Cadastrar um webhook por tipo de evento:
+
+Pedido recebido
+
+Pizza em preparo
+
+Pizza pronta
+
+Motoboy atrasado
+
+Trânsito detectado
+
+Definir:
+
+URL do webhook
+
+Texto do alerta
+
+Variáveis dinâmicas:
+
+{{cliente_nome}}
+
+{{cliente_telefone}}
+
+{{pizza_nome}}
+
+{{status}}
+
+6️⃣ WHATSAPP (PLANEJAMENTO)
+
+Planejar integração com WhatsApp via:
+
+API externa (ex: Z-API, Meta Cloud API, etc)
+
+Estrutura pronta para envio automático
+
+Exemplo de mensagem:
+
+“🍕 Olá {{cliente_nome}}, sua pizza {{pizza_nome}} acabou de sair do forno e está a caminho!”
+
+7️⃣ IA PARA OTIMIZAÇÃO DE COZINHA (MELHORIA EXTRA)
+
+Planejar (não precisa treinar agora):
+
+IA analisando:
+
+Tempo médio real por etapa
+
+Gargalos de forno
+
+Atrasos recorrentes
+
+IA sugerindo:
+
+Reorganização de pedidos
+
+Prioridade de preparo
+
+Alertas preventivos
+
+🧩 O QUE VOCÊ DEVE ENTREGAR NA RESPOSTA
+📌 1️⃣ ARQUITETURA GERAL
+
+Backend (linguagem sugerida)
+
+Frontend (framework)
+
+Comunicação em tempo real
+
+Banco de dados
+
+📌 2️⃣ FLUXO COMPLETO DO KDS
+
+Do pedido até “pizza pronta”
+
+Com todos os gatilhos
+
+📌 3️⃣ MODELO DE DADOS (SCHEMA)
+
+Tabelas
+
+Campos
+
+Relações
+
+📌 4️⃣ PLANO DE IMPLEMENTAÇÃO EM ETAPAS
+
+O que implementar primeiro
+
+O que pode evoluir depois
+
+📌 5️⃣ COMO RODAR NA TV
+
+Opção mais simples
+
+Opção mais robusta
+
+Passo a passo físico
+
+📌 6️⃣ EXEMPLOS DE CÓDIGO (BASE)
+
+Endpoint de KDS
+
+WebSocket / atualização em tempo real
+
+Trigger de alerta
+
+🍕 CARDÁPIO (OBRIGATÓRIO NO BANCO)
+
+👉 Todas as pizzas listadas abaixo DEVEM ser cadastradas, com ingredientes e categorias, e previstas para uso no KDS:
+
+(usar exatamente o cardápio enviado pelo usuário, mantendo IDs, nomes e categorias)

@@ -1,0 +1,130 @@
+Abaixo está a descrição de cada pizza do cardápio, com explicação clara dos ingredientes e do perfil de sabor, organizada por categoria.
+
+---
+
+## 🐟 Peixes
+
+**01 – Atum**: Atum desfiado combinado com cebola, trazendo sabor marcante e levemente salgado.
+**02 – Atum Cheese**: Atum com mussarela derretida, equilibrando intensidade e cremosidade.
+**03 – Atum Cebola**: Atum temperado com cebola refogada, sabor clássico e aromático.
+**04 – Atum Muss**: Atum com mussarela, textura macia e sabor suave.
+**05 – Atum UVA (doce)**: Atum com uva passa, contraste agridoce sofisticado.
+**06 – Espanhola**: Atum, champignon, azeitona, bacon, cebola, mussarela e tomate – pizza rica e complexa.
+**07 – Parma**: Atum, presunto de Parma, champignon, cebola e mussarela – sabor intenso e refinado.
+**08 – Romana**: Mussarela, alho, cebola e tomate – simples e aromática.
+**09 – Camarão**: Camarão refogado com mussarela – sabor marítimo marcante.
+**10 – Bacalhau**: Bacalhau desfiado com legumes e mussarela – tradicional e encorpada.
+**11 – Alliche**: Aliche, parmesão e tomate – salgada e intensa.
+
+---
+
+## 🌶️ Calabresa
+
+**12 – Calabresa**: Calabresa fatiada com cebola.
+**13 – Baiana**: Calabresa, mussarela e pimenta – levemente picante.
+**14 – Creta**: Calabresa, escarola, milho, ovo, cebola, tomate e mussarela – completa e rústica.
+**15 – Calabria**: Calabresa, brócolis, milho, cebola e alho – sabor forte e aromático.
+**16 – Di-A-Dia**: Calabresa, tomate, parmesão e manjericão – clássica e equilibrada.
+**17 – Pantanal**: Calabresa, champignon, palmito, milho e mussarela – rica em texturas.
+**18 – Calabresa Light**: Calabresa grelhada com cebola – mais leve.
+**19 – Pepperone**: Mussarela, pepperone, cebola e parmesão – sabor intenso.
+**20 – Toscana**: Mussarela, calabresa, cebola e parmesão – cremosa e forte.
+**21 – Paulista**: Mussarela, calabresa, ovos e azeitonas – tradicional brasileira.
+
+---
+
+## 🥩 Lombo
+
+**22 – Canadense**: Lombinho com catupiry – cremosa e suave.
+**23 – Cancun**: Lombinho, champignon, catupiry, bacon, tomate e parmesão – gourmet.
+**24 – Italiana**: Lombinho, palmito, milho e catupiry – equilibrada.
+**25 – Palestra**: Lombo, brócolis, champignon e catupiry – rica em sabor.
+**26 – Paris**: Lombo, tomate picado, champignon, cebola e mussarela – refinada.
+
+---
+
+## 🍖 Presunto
+
+**27 – Portuguesa**: Mussarela, presunto, ervilha, ovos e cebola – clássica.
+**28 – Portuga**: Presunto, palmito, cebola, ovo, bacon e mussarela.
+**29 – Aurora**: Presunto, champignon, bacon, catupiry, tomate e parmesão.
+**30 – Amazon**: Presunto, brócolis, palmito, tomate e milho.
+**31 – Moda da Casa**: Presunto, ovos, abobrinha, cebola e mussarela.
+**32 – Veneza**: Presunto, palmito, milho, champignon e mussarela.
+**33 – Cubana**: Presunto, ovos, brócolis, tomate, cebola e mussarela.
+**34 – Grega**: Presunto, palmito, ovos, milho e catupiry.
+**35 – Primavera**: Presunto, milho, palmito e mussarela.
+**36 – Baúru**: Presunto, tomate e mussarela.
+
+---
+
+## 🍗 Frango
+
+**37 – Frango com Catupiry**: Frango desfiado com catupiry.
+**38 – Framily**: Frango, milho e mussarela.
+**39 – Frangobom**: Frango, atum, brócolis e mussarela.
+**40 – Frango**: Frango, atum, champignon, brócolis, mussarela e catupiry.
+**41 – Frangote**: Frango, milho, bacon e mussarela.
+**42 – Moda Caipira**: Frango, milho, legumes, champignon e mussarela.
+**43 – Frango Roquefão**: Frango com requeijão da casa.
+
+---
+
+## 🦃 Peito de Peru
+
+**44 – Peru**: Peito de peru, tomate, cebola, azeitona e catupiry.
+**45 – Cariú**: Peito de peru, cebola, champignon, milho e mussarela.
+**46 – Peruana**: Peito de peru, palmito, ovos e mussarela.
+**47 – Florense**: Peito de peru, brócolis, champignon, milho e mussarela.
+
+---
+
+## 🥦 Legumes
+
+**48 – Abobrinha**: Mussarela, abobrinha, cebola, parmesão e alho.
+**49 – Abobrinha Bacon**: Mussarela, abobrinha, bacon e alho.
+**50 – Berinjela**: Mussarela, berinjela, cebola, parmesão e alho.
+**51 – Beijim**: Mussarela, berinjela, tomate, bacon e alho.
+
+---
+
+## 🧀 Queijos
+
+**57 – Mussarela**: Mussarela tradicional.
+**58 – Marguerita**: Mussarela, tomate, parmesão e manjericão.
+**59 – Napolitana**: Mussarela, parmesão e tomate.
+**60 – Dois Queijos**: Mussarela e requeijão.
+**61 – Quatro Queijos**: Mussarela, provolone, requeijão e parmesão.
+**62 – Cinco Queijos**: Mussarela, provolone, catupiry, parmesão e gorgonzola.
+**63 – Catupiry**: Catupiry puro.
+**64 – Catupiry Bacon**: Catupiry com bacon.
+**65 – Catupiry Milho**: Catupiry com milho.
+**66 – Siciliana**: Mussarela, champignon e bacon.
+**67 – Espiga**: Milho, mussarela, catupiry e alho.
+**68 – Mussarela de Búfala**: Mussarela de búfala, tomate seco e rúcula.
+**69 – Francesa**: Mussarela de búfala, champignon, tomate seco e milho.
+**70 – Bacon**: Mussarela, bacon e ovos.
+
+---
+
+## 🍕 Variadas
+
+**71 – Alho**: Alho, mussarela, parmesão e tomate.
+**72 – Carne Seca**: Mussarela, carne seca e cebola.
+**73 – Fiorentina**: Palmito, ervilha, bacon, cebola e mussarela.
+**74 – Indiana**: Brócolis, alho, catupiry e parmesão.
+**75 – Inglesa**: Frango, bacon, milho e ervilha.
+**76 – Japonesa**: Escarola e champignon.
+**77 – Mineira**: Mussarela, calabresa, palmito, milho e cebola.
+
+---
+
+## 🍬 Doces
+
+**94 – Sensação**: Leite condensado, chocolate e morango.
+**95 – Romeu e Julieta**: Goiabada e mussarela.
+**96 – Brigadeiro**: Leite condensado, chocolate e granulado.
+**97 – Chocolate**: Chocolate com castanha, nozes, granulado e cereja.
+**98 – Banana Mussarela**: Mussarela, banana, canela, leite condensado e uva passa.
+**99 – Banana Chocolate**: Banana, canela, leite condensado e chocolate.
+**100 – Banocolate**: Mussarela, banana, canela, leite condensado e chocolate.
