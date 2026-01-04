@@ -48,6 +48,12 @@ import {
   atualizarEstoqueIngrediente as atualizarEstoqueIngredienteAPI, 
   cancelarMotoboy as cancelarMotoboyAPI 
 } from "./agente-ia";
+import {
+  listarPedidosAtivosKDS,
+  iniciarPreparoKDS,
+  avancarEtapaKDS,
+  finalizarPizzaKDS,
+} from "./kds_service";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -2858,6 +2864,65 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error canceling motoboy:", error);
       res.status(500).json({ error: "Falha ao cancelar motoboy" });
+    }
+  });
+
+  // ============================================
+  // KDS (KITCHEN DISPLAY SYSTEM) ROUTES
+  // ============================================
+
+  app.get("/api/kds/pedidos-ativos", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+
+      const pedidosAtivos = await listarPedidosAtivosKDS(tenantId);
+      res.json(pedidosAtivos);
+    } catch (error) {
+      console.error("Error fetching active KDS orders:", error);
+      res.status(500).json({ error: "Falha ao buscar pedidos ativos do KDS" });
+    }
+  });
+
+  app.post("/api/kds/iniciar-preparo/:progressoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+      const { progressoId } = req.params;
+
+      const progressoAtualizado = await iniciarPreparoKDS(progressoId, tenantId);
+      res.json(progressoAtualizado);
+    } catch (error) {
+      console.error("Error starting KDS preparation:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Falha ao iniciar preparo" });
+    }
+  });
+
+  app.post("/api/kds/avancar-etapa/:progressoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+      const { progressoId } = req.params;
+
+      const resultado = await avancarEtapaKDS(progressoId, tenantId);
+      res.json(resultado);
+    } catch (error) {
+      console.error("Error advancing KDS step:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Falha ao avançar etapa" });
+    }
+  });
+
+  app.post("/api/kds/finalizar/:progressoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+      const { progressoId } = req.params;
+
+      const progressoFinalizado = await finalizarPizzaKDS(progressoId, tenantId);
+      res.json(progressoFinalizado);
+    } catch (error) {
+      console.error("Error finishing KDS pizza:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Falha ao finalizar pizza" });
     }
   });
 

@@ -138,3 +138,41 @@ export function broadcastNewOrder(tenantId: string, pedido: Pedido) {
 export function broadcastOrderStatusChange(tenantId: string, pedido: Pedido) {
   broadcastPedidoUpdate(tenantId, pedido, "updated");
 }
+
+// ============================================
+// KDS WEBSOCKET EVENTS
+// ============================================
+
+export function broadcastKDSUpdate(tenantId: string, type: string, data: any) {
+  const message = JSON.stringify({
+    type,
+    data,
+    timestamp: new Date().toISOString(),
+  });
+
+  connections
+    .filter((conn) => conn.tenantId === tenantId && conn.ws.readyState === WebSocket.OPEN)
+    .forEach((conn) => {
+      try {
+        conn.ws.send(message);
+      } catch (error) {
+        console.error("Error sending KDS WebSocket message:", error);
+      }
+    });
+}
+
+export function broadcastNovoPedidoKDS(tenantId: string, pedidoId: string) {
+  broadcastKDSUpdate(tenantId, "novo_pedido_kds", { pedidoId });
+}
+
+export function broadcastEtapaAvancadaKDS(tenantId: string, progressoId: string, etapaAtual: number) {
+  broadcastKDSUpdate(tenantId, "etapa_avancada_kds", { progressoId, etapaAtual });
+}
+
+export function broadcastPizzaProntaKDS(tenantId: string, progressoId: string, produtoNome: string) {
+  broadcastKDSUpdate(tenantId, "pizza_pronta_kds", { progressoId, produtoNome });
+}
+
+export function broadcastAtualizarKDS(tenantId: string) {
+  broadcastKDSUpdate(tenantId, "atualizar_kds", {});
+}

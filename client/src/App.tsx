@@ -24,6 +24,7 @@ import Configuracoes from "@/pages/Configuracoes";
 import Rastreio from "@/pages/Rastreio";
 import Clientes from "@/pages/Clientes";
 import Produtos from "@/pages/Produtos";
+import KDS from "@/pages/KDS";
 import SuperAdminDashboard from "@/pages/SuperAdminDashboard";
 import SuperAdminDashboardGlobal from "@/pages/SuperAdminDashboardGlobal";
 import SuperAdminLogistica from "@/pages/SuperAdminLogistica";
@@ -57,6 +58,7 @@ function Router() {
       <Route path="/dashboard/agente-ia" component={AgenteIA} />
       <Route path="/dashboard/configuracoes" component={Configuracoes} />
       <Route path="/cozinha" component={Cozinha} />
+      <Route path="/kds" component={KDS} />
       <Route path="/rastreio/:pedidoId" component={Rastreio} />
       <Route component={NotFound} />
     </Switch>

@@ -755,10 +755,11 @@ export async function popularCardapio(tenantId: string) {
 }
 
 // Se executado diretamente
-if (require.main === module) {
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
   const tenantId = process.argv[2];
   if (!tenantId) {
-    console.error("❌ Uso: ts-node server/scripts/popular-cardapio.ts <tenant-id>");
+    console.error("❌ Uso: tsx server/scripts/popular-cardapio.ts <tenant-id>");
     process.exit(1);
   }
   popularCardapio(tenantId).then(() => process.exit(0));
