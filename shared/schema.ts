@@ -42,6 +42,9 @@ export const produtos = pgTable("produtos", {
   imagem: text("imagem"),
   tempoPreparoEstimado: integer("tempo_preparo_estimado").default(15),
   tempoExtraPreparo: integer("tempo_extra_preparo").default(0),
+  etapasKDS: jsonb("etapas_kds").$type<Array<{nome: string; tempoSegundos: number; instrucoes: string}>>(),
+  ingredientesTexto: text("ingredientes_texto"),
+  tipoPizza: text("tipo_pizza"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -229,6 +232,70 @@ export const custoMercado = pgTable("custo_mercado", {
   precoMercado: decimal("preco_mercado", { precision: 10, scale: 4 }).notNull(),
   fornecedor: text("fornecedor"),
   dataAtualizacao: timestamp("data_atualizacao").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const progressoKDS = pgTable("progresso_kds", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  pedidoId: varchar("pedido_id").notNull().references(() => pedidos.id, { onDelete: "cascade" }),
+  produtoId: varchar("produto_id").references(() => produtos.id, { onDelete: "set null" }),
+  produtoNome: text("produto_nome").notNull(),
+  etapaAtual: integer("etapa_atual").notNull().default(0),
+  totalEtapas: integer("total_etapas").notNull(),
+  etapas: jsonb("etapas").$type<Array<{
+    nome: string;
+    tempoSegundos: number;
+    instrucoes: string;
+    iniciadoEm: string | null;
+    concluidoEm: string | null;
+    tempoReal: number | null;
+  }>>().notNull(),
+  statusKDS: text("status_kds").notNull().default('aguardando'),
+  iniciadoEm: timestamp("iniciado_em"),
+  concluidoEm: timestamp("concluido_em"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const historicoTimingKDS = pgTable("historico_timing_kds", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  pedidoId: varchar("pedido_id").notNull().references(() => pedidos.id, { onDelete: "cascade" }),
+  produtoId: varchar("produto_id").references(() => produtos.id, { onDelete: "set null" }),
+  produtoNome: text("produto_nome").notNull(),
+  etapaNome: text("etapa_nome").notNull(),
+  tempoEstimado: integer("tempo_estimado").notNull(),
+  tempoReal: integer("tempo_real").notNull(),
+  desvio: integer("desvio").notNull(),
+  iniciadoEm: timestamp("iniciado_em").notNull(),
+  concluidoEm: timestamp("concluido_em").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const configAlertasKDS = pgTable("config_alertas_kds", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  tipoEvento: text("tipo_evento").notNull(),
+  webhookUrl: text("webhook_url"),
+  templateMensagem: text("template_mensagem").notNull(),
+  ativo: boolean("ativo").notNull().default(true),
+  enviarWhatsApp: boolean("enviar_whatsapp").notNull().default(false),
+  enviarWebhook: boolean("enviar_webhook").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const alertasKDSEnviados = pgTable("alertas_kds_enviados", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  configAlertaId: varchar("config_alerta_id").notNull().references(() => configAlertasKDS.id, { onDelete: "cascade" }),
+  pedidoId: varchar("pedido_id").references(() => pedidos.id, { onDelete: "set null" }),
+  tipoEvento: text("tipo_evento").notNull(),
+  mensagem: text("mensagem").notNull(),
+  destinatario: text("destinatario"),
+  statusEnvio: text("status_envio").notNull().default('pendente'),
+  respostaWebhook: jsonb("resposta_webhook"),
+  erro: text("erro"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -422,6 +489,39 @@ export type InsertIngrediente = z.infer<typeof insertIngredienteSchema>;
 
 export type ReceitaIngrediente = typeof receitasIngredientes.$inferSelect;
 export type InsertReceitaIngrediente = z.infer<typeof insertReceitaIngredienteSchema>;
+
+export const insertProgressoKDSSchema = createInsertSchema(progressoKDS).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertHistoricoTimingKDSSchema = createInsertSchema(historicoTimingKDS).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertConfigAlertasKDSSchema = createInsertSchema(configAlertasKDS).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAlertasKDSEnviadosSchema = createInsertSchema(alertasKDSEnviados).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProgressoKDS = typeof progressoKDS.$inferSelect;
+export type InsertProgressoKDS = z.infer<typeof insertProgressoKDSSchema>;
+
+export type HistoricoTimingKDS = typeof historicoTimingKDS.$inferSelect;
+export type InsertHistoricoTimingKDS = z.infer<typeof insertHistoricoTimingKDSSchema>;
+
+export type ConfigAlertasKDS = typeof configAlertasKDS.$inferSelect;
+export type InsertConfigAlertasKDS = z.infer<typeof insertConfigAlertasKDSSchema>;
+
+export type AlertasKDSEnviados = typeof alertasKDSEnviados.$inferSelect;
+export type InsertAlertasKDSEnviados = z.infer<typeof insertAlertasKDSEnviadosSchema>;
 
 export const insertCustoMercadoSchema = createInsertSchema(custoMercado).omit({
   id: true,
