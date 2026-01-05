@@ -26,8 +26,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Package, Clock, DollarSign, Loader2, Pencil, Trash2, Image } from "lucide-react";
+import { Plus, Search, Package, Clock, DollarSign, Loader2, Pencil, Trash2, Image, MoreVertical, Copy, Tag } from "lucide-react";
 
 interface Produto {
   id: string;
@@ -37,8 +43,34 @@ interface Produto {
   categoria: string | null;
   imagem: string | null;
   tempoPreparoEstimado: number | null;
+  disponibilidade: string | null;
+  precoPromocional: string | null;
+  promocaoInicio: string | null;
+  promocaoFim: string | null;
+  promocaoAtiva: boolean | null;
   createdAt: string;
 }
+
+const isPromocaoAtiva = (produto: Produto) => {
+  if (!produto.promocaoAtiva || !produto.precoPromocional) return false;
+  const agora = new Date();
+  if (produto.promocaoInicio && new Date(produto.promocaoInicio) > agora) return false;
+  if (produto.promocaoFim && new Date(produto.promocaoFim) < agora) return false;
+  return true;
+};
+
+const getDisponibilidadeBadge = (disponibilidade: string | null) => {
+  switch (disponibilidade) {
+    case 'ativo':
+      return <Badge className="bg-green-500 hover:bg-green-600">Ativo</Badge>;
+    case 'esgotado':
+      return <Badge className="bg-red-500 hover:bg-red-600">Esgotado</Badge>;
+    case 'pausado':
+      return <Badge className="bg-yellow-500 hover:bg-yellow-600">Pausado</Badge>;
+    default:
+      return <Badge className="bg-green-500 hover:bg-green-600">Ativo</Badge>;
+  }
+};
 
 const CATEGORIAS = [
   "Pizzas Tradicionais",
@@ -58,6 +90,7 @@ export default function Produtos() {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [filtroDisponibilidade, setFiltroDisponibilidade] = useState<string>("todos");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduto, setEditingProduto] = useState<Produto | null>(null);
   const [formData, setFormData] = useState({
@@ -67,6 +100,13 @@ export default function Produtos() {
     categoria: "",
     imagem: "",
     tempoPreparoEstimado: "15",
+  });
+  const [isPromocaoDialogOpen, setIsPromocaoDialogOpen] = useState(false);
+  const [promocaoProduto, setPromocaoProduto] = useState<Produto | null>(null);
+  const [promocaoFormData, setPromocaoFormData] = useState({
+    precoPromocional: "",
+    promocaoInicio: "",
+    promocaoFim: "",
   });
 
   const effectiveTenantId = isSuperAdmin ? selectedTenantId : null;
@@ -115,7 +155,7 @@ export default function Produtos() {
     mutationFn: async ({ id, data }: { id: string; data: typeof formData }) => {
       const url = buildApiUrl(`/api/produtos/${id}`, effectiveTenantId);
       const res = await fetch(url, {
-        method: "PUT",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
@@ -137,6 +177,27 @@ export default function Produtos() {
     },
   });
 
+  const alterarDisponibilidadeMutation = useMutation({
+    mutationFn: async ({ id, disponibilidade }: { id: string; disponibilidade: string }) => {
+      const url = buildApiUrl(`/api/produtos/${id}`, effectiveTenantId);
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ disponibilidade }),
+      });
+      if (!res.ok) throw new Error("Failed to update availability");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["produtos"] });
+      toast({ title: "Disponibilidade atualizada!" });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Erro ao alterar disponibilidade" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const url = buildApiUrl(`/api/produtos/${id}`, effectiveTenantId);
@@ -154,6 +215,91 @@ export default function Produtos() {
       toast({ variant: "destructive", title: "Erro ao remover produto" });
     },
   });
+
+  const clonarMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const url = buildApiUrl(`/api/produtos/${id}/clonar`, effectiveTenantId);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error("Failed to clone product");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["produtos"] });
+      toast({ title: "Produto clonado com sucesso!" });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Erro ao clonar produto" });
+    },
+  });
+
+  const ativarPromocaoMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof promocaoFormData }) => {
+      const url = buildApiUrl(`/api/produtos/${id}/promocao`, effectiveTenantId);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          precoPromocional: data.precoPromocional,
+          promocaoInicio: data.promocaoInicio || null,
+          promocaoFim: data.promocaoFim || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to set promotion");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["produtos"] });
+      toast({ title: "Promoção ativada com sucesso!" });
+      setIsPromocaoDialogOpen(false);
+      setPromocaoProduto(null);
+      setPromocaoFormData({ precoPromocional: "", promocaoInicio: "", promocaoFim: "" });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Erro ao ativar promoção" });
+    },
+  });
+
+  const desativarPromocaoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const url = buildApiUrl(`/api/produtos/${id}/promocao`, effectiveTenantId);
+      const res = await fetch(url, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to deactivate promotion");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["produtos"] });
+      toast({ title: "Promoção desativada!" });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Erro ao desativar promoção" });
+    },
+  });
+
+  const abrirModalPromocao = (produto: Produto) => {
+    setPromocaoProduto(produto);
+    setPromocaoFormData({
+      precoPromocional: produto.precoPromocional || "",
+      promocaoInicio: produto.promocaoInicio ? produto.promocaoInicio.substring(0, 16) : "",
+      promocaoFim: produto.promocaoFim ? produto.promocaoFim.substring(0, 16) : "",
+    });
+    setIsPromocaoDialogOpen(true);
+  };
+
+  const handlePromocaoSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (promocaoProduto) {
+      ativarPromocaoMutation.mutate({ id: promocaoProduto.id, data: promocaoFormData });
+    }
+  };
 
   const resetForm = () => {
     setFormData({
@@ -194,7 +340,9 @@ export default function Produtos() {
     const matchesSearch = produto.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       produto.descricao?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === "all" || produto.categoria === categoryFilter;
-    return matchesSearch && matchesCategory;
+    const matchesDisponibilidade = filtroDisponibilidade === "todos" || 
+      (produto.disponibilidade || "ativo") === filtroDisponibilidade;
+    return matchesSearch && matchesCategory && matchesDisponibilidade;
   });
 
   const categories = [...new Set(produtos.map((p) => p.categoria).filter(Boolean))] as string[];
@@ -364,6 +512,17 @@ export default function Produtos() {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={filtroDisponibilidade} onValueChange={setFiltroDisponibilidade}>
+                <SelectTrigger className="w-[150px]" data-testid="select-filter-disponibilidade">
+                  <SelectValue placeholder="Disponibilidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="ativo">Ativos</SelectItem>
+                  <SelectItem value="esgotado">Esgotados</SelectItem>
+                  <SelectItem value="pausado">Pausados</SelectItem>
+                </SelectContent>
+              </Select>
               <Badge variant="secondary">
                 {filteredProdutos.length} produtos
               </Badge>
@@ -398,7 +557,64 @@ export default function Produtos() {
                           <Image className="h-12 w-12 text-muted-foreground/50" />
                         </div>
                       )}
+                      <div className="absolute top-2 left-2">
+                        {getDisponibilidadeBadge(produto.disponibilidade)}
+                      </div>
                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="icon"
+                              variant="secondary"
+                              className="h-8 w-8"
+                              data-testid={`button-menu-product-${produto.id}`}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                              onClick={() => alterarDisponibilidadeMutation.mutate({ id: produto.id, disponibilidade: 'ativo' })}
+                              data-testid={`menu-ativo-${produto.id}`}
+                            >
+                              Marcar como Ativo
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => alterarDisponibilidadeMutation.mutate({ id: produto.id, disponibilidade: 'esgotado' })}
+                              data-testid={`menu-esgotado-${produto.id}`}
+                            >
+                              Marcar como Esgotado
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => alterarDisponibilidadeMutation.mutate({ id: produto.id, disponibilidade: 'pausado' })}
+                              data-testid={`menu-pausado-${produto.id}`}
+                            >
+                              Pausar Vendas
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => clonarMutation.mutate(produto.id)}
+                              data-testid={`menu-clonar-${produto.id}`}
+                            >
+                              <Copy className="w-4 h-4 mr-2" />
+                              Clonar Produto
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => abrirModalPromocao(produto)}
+                              data-testid={`menu-promocao-${produto.id}`}
+                            >
+                              <Tag className="w-4 h-4 mr-2" />
+                              Configurar Promoção
+                            </DropdownMenuItem>
+                            {produto.promocaoAtiva && (
+                              <DropdownMenuItem 
+                                onClick={() => desativarPromocaoMutation.mutate(produto.id)}
+                                data-testid={`menu-desativar-promocao-${produto.id}`}
+                              >
+                                Desativar Promoção
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         <Button
                           size="icon"
                           variant="secondary"
@@ -433,10 +649,18 @@ export default function Produtos() {
                         </p>
                       )}
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1 text-lg font-bold text-primary">
-                          <DollarSign className="h-4 w-4" />
-                          {parseFloat(produto.preco).toFixed(2)}
-                        </div>
+                        {isPromocaoAtiva(produto) ? (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="line-through text-gray-400 text-sm">R$ {parseFloat(produto.preco).toFixed(2)}</span>
+                            <span className="text-green-600 font-bold">R$ {parseFloat(produto.precoPromocional!).toFixed(2)}</span>
+                            <Badge className="bg-orange-500 hover:bg-orange-600">PROMOÇÃO</Badge>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 text-lg font-bold text-primary">
+                            <DollarSign className="h-4 w-4" />
+                            {parseFloat(produto.preco).toFixed(2)}
+                          </div>
+                        )}
                         <div className="flex items-center gap-1 text-sm text-muted-foreground">
                           <Clock className="h-4 w-4" />
                           {produto.tempoPreparoEstimado || 15} min
@@ -449,6 +673,84 @@ export default function Produtos() {
             )}
           </CardContent>
         </Card>
+
+        <Dialog open={isPromocaoDialogOpen} onOpenChange={setIsPromocaoDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Configurar Promoção</DialogTitle>
+              <DialogDescription>
+                {promocaoProduto ? `Configure a promoção para "${promocaoProduto.nome}"` : "Configure a promoção do produto"}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handlePromocaoSubmit}>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="precoPromocional">Preço Promocional (R$) *</Label>
+                  <Input
+                    id="precoPromocional"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={promocaoFormData.precoPromocional}
+                    onChange={(e) => setPromocaoFormData({ ...promocaoFormData, precoPromocional: e.target.value })}
+                    placeholder="29.90"
+                    required
+                    data-testid="input-preco-promocional"
+                  />
+                  {promocaoProduto && (
+                    <p className="text-sm text-muted-foreground">
+                      Preço original: R$ {parseFloat(promocaoProduto.preco).toFixed(2)}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="promocaoInicio">Início da Promoção</Label>
+                  <Input
+                    id="promocaoInicio"
+                    type="datetime-local"
+                    value={promocaoFormData.promocaoInicio}
+                    onChange={(e) => setPromocaoFormData({ ...promocaoFormData, promocaoInicio: e.target.value })}
+                    data-testid="input-promocao-inicio"
+                  />
+                  <p className="text-xs text-muted-foreground">Deixe vazio para iniciar imediatamente</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="promocaoFim">Fim da Promoção</Label>
+                  <Input
+                    id="promocaoFim"
+                    type="datetime-local"
+                    value={promocaoFormData.promocaoFim}
+                    onChange={(e) => setPromocaoFormData({ ...promocaoFormData, promocaoFim: e.target.value })}
+                    data-testid="input-promocao-fim"
+                  />
+                  <p className="text-xs text-muted-foreground">Deixe vazio para não ter data de término</p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsPromocaoDialogOpen(false);
+                    setPromocaoProduto(null);
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={ativarPromocaoMutation.isPending}
+                  data-testid="button-salvar-promocao"
+                >
+                  {ativarPromocaoMutation.isPending && (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  )}
+                  Ativar Promoção
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

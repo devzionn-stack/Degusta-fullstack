@@ -25,6 +25,7 @@ import {
   type InsertAlertaFrota,
   type SystemLog,
   type InsertSystemLog,
+  type TemplateEtapasKDS,
   users,
   tenants,
   clientes,
@@ -38,6 +39,7 @@ import {
   previsaoEstoque,
   alertasFrota,
   systemLogs,
+  templatesEtapasKDS,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, inArray, sql } from "drizzle-orm";
@@ -147,6 +149,12 @@ export interface IStorage {
   
   getAllAlertas(filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date }, limit: number, offset: number): Promise<AlertaFrota[]>;
   getAllAlertasCount(filters: { tenantId?: string; tipo?: string; startDate?: Date; endDate?: Date }): Promise<number>;
+
+  getTemplatesEtapasKDS(tenantId: string): Promise<TemplateEtapasKDS[]>;
+  getTemplateEtapasKDSByCategoria(tenantId: string, categoria: string): Promise<TemplateEtapasKDS | null>;
+  createTemplateEtapasKDS(tenantId: string, data: { categoria: string; etapas: any[] }): Promise<TemplateEtapasKDS>;
+  updateTemplateEtapasKDS(id: string, tenantId: string, data: { etapas: any[] }): Promise<TemplateEtapasKDS | null>;
+  deleteTemplateEtapasKDS(id: string, tenantId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -904,6 +912,48 @@ export class DatabaseStorage implements IStorage {
     }
     const result = await query;
     return Number(result[0]?.count || 0);
+  }
+
+  async getTemplatesEtapasKDS(tenantId: string): Promise<TemplateEtapasKDS[]> {
+    return await db
+      .select()
+      .from(templatesEtapasKDS)
+      .where(eq(templatesEtapasKDS.tenantId, tenantId));
+  }
+
+  async getTemplateEtapasKDSByCategoria(tenantId: string, categoria: string): Promise<TemplateEtapasKDS | null> {
+    const [template] = await db
+      .select()
+      .from(templatesEtapasKDS)
+      .where(and(eq(templatesEtapasKDS.tenantId, tenantId), eq(templatesEtapasKDS.categoria, categoria)));
+    return template || null;
+  }
+
+  async createTemplateEtapasKDS(tenantId: string, data: { categoria: string; etapas: any[] }): Promise<TemplateEtapasKDS> {
+    const [template] = await db
+      .insert(templatesEtapasKDS)
+      .values({
+        tenantId,
+        categoria: data.categoria,
+        etapas: data.etapas,
+      })
+      .returning();
+    return template;
+  }
+
+  async updateTemplateEtapasKDS(id: string, tenantId: string, data: { etapas: any[] }): Promise<TemplateEtapasKDS | null> {
+    const [updated] = await db
+      .update(templatesEtapasKDS)
+      .set({ etapas: data.etapas })
+      .where(and(eq(templatesEtapasKDS.id, id), eq(templatesEtapasKDS.tenantId, tenantId)))
+      .returning();
+    return updated || null;
+  }
+
+  async deleteTemplateEtapasKDS(id: string, tenantId: string): Promise<void> {
+    await db
+      .delete(templatesEtapasKDS)
+      .where(and(eq(templatesEtapasKDS.id, id), eq(templatesEtapasKDS.tenantId, tenantId)));
   }
 }
 

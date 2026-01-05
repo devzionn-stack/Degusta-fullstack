@@ -53,7 +53,11 @@ import {
   iniciarPreparoKDS,
   avancarEtapaKDS,
   finalizarPizzaKDS,
+  pausarPreparoKDS,
+  retomarPreparoKDS,
+  obterMetricasKDS,
 } from "./kds_service";
+import { consolidarDadosML, preverTempoPreparoPizza, preverTempoTotalPedido } from "./ml_pipeline";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -421,6 +425,107 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete produto" });
+    }
+  });
+
+  app.post("/api/produtos/:id/clonar", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      
+      const original = await storage.getProduto(id, tenantId);
+      if (!original) {
+        return res.status(404).json({ error: "Produto não encontrado" });
+      }
+      
+      const novoNome = req.body.nome || `${original.nome} (Cópia)`;
+      const novoProduto = await storage.createProduto({
+        tenantId,
+        nome: novoNome,
+        descricao: original.descricao,
+        preco: original.preco,
+        categoria: original.categoria,
+        ingredientesTexto: original.ingredientesTexto,
+        imagem: original.imagem,
+        tempoPreparoEstimado: original.tempoPreparoEstimado,
+        tempoExtraPreparo: original.tempoExtraPreparo,
+        etapasKDS: original.etapasKDS,
+        tipoPizza: original.tipoPizza,
+        disponibilidade: "ativo",
+      });
+      
+      res.json(novoProduto);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/produtos/:id/promocao", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      const { precoPromocional, promocaoInicio, promocaoFim } = req.body;
+      
+      const produto = await storage.updateProduto(id, tenantId, {
+        precoPromocional,
+        promocaoInicio: promocaoInicio ? new Date(promocaoInicio) : null,
+        promocaoFim: promocaoFim ? new Date(promocaoFim) : null,
+        promocaoAtiva: true,
+      });
+      
+      if (!produto) {
+        return res.status(404).json({ error: "Produto não encontrado" });
+      }
+      
+      res.json(produto);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/produtos/:id/promocao", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      
+      const produto = await storage.updateProduto(id, tenantId, {
+        promocaoAtiva: false,
+      });
+      
+      if (!produto) {
+        return res.status(404).json({ error: "Produto não encontrado" });
+      }
+      
+      res.json(produto);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/produtos/:id/custo", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+
+      const custo = await calcularCustoProduto(id, tenantId);
+
+      if (!custo) {
+        return res.status(404).json({ error: "Produto não encontrado" });
+      }
+
+      res.json(custo);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Falha ao calcular custo do produto" });
+    }
+  });
+
+  app.get("/api/custos-produtos", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const custos = await listarCustosProdutos(tenantId);
+      res.json(custos);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Falha ao listar custos dos produtos" });
     }
   });
 
@@ -2884,6 +2989,18 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/kds/metricas", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+      const metricas = await obterMetricasKDS(tenantId);
+      res.json(metricas);
+    } catch (error: any) {
+      console.error("Error fetching KDS metrics:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/kds/iniciar-preparo/:progressoId", requireAuth, requireTenant, async (req, res) => {
     try {
       const user = req.user!;
@@ -2923,6 +3040,148 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error finishing KDS pizza:", error);
       res.status(500).json({ error: error instanceof Error ? error.message : "Falha ao finalizar pizza" });
+    }
+  });
+
+  app.post("/api/kds/pausar/:progressoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+      const { progressoId } = req.params;
+
+      const resultado = await pausarPreparoKDS(progressoId, tenantId);
+      res.json(resultado);
+    } catch (error) {
+      console.error("Error pausing KDS preparation:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Falha ao pausar preparo" });
+    }
+  });
+
+  app.post("/api/kds/retomar/:progressoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+      const { progressoId } = req.params;
+
+      const resultado = await retomarPreparoKDS(progressoId, tenantId);
+      res.json(resultado);
+    } catch (error) {
+      console.error("Error resuming KDS preparation:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Falha ao retomar preparo" });
+    }
+  });
+
+  // ============================================
+  // KDS TEMPLATES ETAPAS ROUTES
+  // ============================================
+
+  app.get("/api/kds/templates-etapas", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+      const templates = await storage.getTemplatesEtapasKDS(tenantId);
+      res.json(templates);
+    } catch (error: any) {
+      console.error("Error fetching KDS templates:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/kds/templates-etapas/:categoria", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+      const template = await storage.getTemplateEtapasKDSByCategoria(tenantId, req.params.categoria);
+      res.json(template);
+    } catch (error: any) {
+      console.error("Error fetching KDS template by category:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/kds/templates-etapas", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+      const { categoria, etapas } = req.body;
+      
+      if (!categoria || !etapas || !Array.isArray(etapas)) {
+        return res.status(400).json({ error: "Categoria e etapas são obrigatórios" });
+      }
+      
+      const template = await storage.createTemplateEtapasKDS(tenantId, { categoria, etapas });
+      res.json(template);
+    } catch (error: any) {
+      console.error("Error creating KDS template:", error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/kds/templates-etapas/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+      const { etapas } = req.body;
+      
+      if (!etapas || !Array.isArray(etapas)) {
+        return res.status(400).json({ error: "Etapas são obrigatórias" });
+      }
+      
+      const template = await storage.updateTemplateEtapasKDS(req.params.id, tenantId, { etapas });
+      if (!template) {
+        return res.status(404).json({ error: "Template não encontrado" });
+      }
+      res.json(template);
+    } catch (error: any) {
+      console.error("Error updating KDS template:", error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/kds/templates-etapas/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = user.tenantId!;
+      await storage.deleteTemplateEtapasKDS(req.params.id, tenantId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting KDS template:", error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============================================
+  // ML PIPELINE ROUTES
+  // ============================================
+
+  app.get("/api/ml/dados-consolidados", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const dados = await consolidarDadosML(tenantId);
+      res.json(dados);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/ml/previsao/:produtoId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const previsao = await preverTempoPreparoPizza(tenantId, req.params.produtoId);
+      res.json(previsao);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ml/previsao-pedido", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { produtoIds } = req.body;
+      const resultado = await preverTempoTotalPedido(tenantId, produtoIds);
+      res.json(resultado);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

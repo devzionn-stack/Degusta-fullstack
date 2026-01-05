@@ -45,6 +45,11 @@ export const produtos = pgTable("produtos", {
   etapasKDS: jsonb("etapas_kds").$type<Array<{nome: string; tempoSegundos: number; instrucoes: string}>>(),
   ingredientesTexto: text("ingredientes_texto"),
   tipoPizza: text("tipo_pizza"),
+  disponibilidade: text("disponibilidade").default("ativo"),
+  precoPromocional: decimal("preco_promocional", { precision: 10, scale: 2 }),
+  promocaoInicio: timestamp("promocao_inicio"),
+  promocaoFim: timestamp("promocao_fim"),
+  promocaoAtiva: boolean("promocao_ativa").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -269,6 +274,12 @@ export const historicoTimingKDS = pgTable("historico_timing_kds", {
   desvio: integer("desvio").notNull(),
   iniciadoEm: timestamp("iniciado_em").notNull(),
   concluidoEm: timestamp("concluido_em").notNull(),
+  numeroIngredientes: integer("numero_ingredientes"),
+  horaPedido: integer("hora_pedido"),
+  diaSemana: integer("dia_semana"),
+  periodoRush: boolean("periodo_rush"),
+  pizzasSimultaneas: integer("pizzas_simultaneas"),
+  categoriaPizza: text("categoria_pizza"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -536,3 +547,23 @@ export const webhookCustoMercadoSchema = z.object({
   precoMercado: z.number().positive(),
   fornecedor: z.string().optional(),
 });
+
+export const templatesEtapasKDS = pgTable("templates_etapas_kds", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  categoria: text("categoria").notNull(),
+  etapas: jsonb("etapas").$type<Array<{
+    nome: string;
+    tempoSegundos: number;
+    instrucoes: string;
+  }>>().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertTemplateEtapasKDSSchema = createInsertSchema(templatesEtapasKDS).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TemplateEtapasKDS = typeof templatesEtapasKDS.$inferSelect;
+export type InsertTemplateEtapasKDS = z.infer<typeof insertTemplateEtapasKDSSchema>;

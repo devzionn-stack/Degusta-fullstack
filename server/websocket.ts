@@ -176,3 +176,25 @@ export function broadcastPizzaProntaKDS(tenantId: string, progressoId: string, p
 export function broadcastAtualizarKDS(tenantId: string) {
   broadcastKDSUpdate(tenantId, "atualizar_kds", {});
 }
+
+export function broadcastPedidoCancelado(tenantId: string, pedidoId: string) {
+  const message = JSON.stringify({
+    type: "pedido_cancelado_kds",
+    pedidoId,
+    timestamp: new Date().toISOString(),
+  });
+  connections
+    .filter((conn) => conn.tenantId === tenantId && conn.ws.readyState === WebSocket.OPEN)
+    .forEach((conn) => conn.ws.send(message));
+}
+
+export function broadcastPedidoSaiuEntrega(tenantId: string, pedidoId: string) {
+  const message = JSON.stringify({
+    type: "pedido_saiu_entrega_kds",
+    pedidoId,
+    timestamp: new Date().toISOString(),
+  });
+  connections
+    .filter((conn) => conn.tenantId === tenantId && conn.ws.readyState === WebSocket.OPEN)
+    .forEach((conn) => conn.ws.send(message));
+}
