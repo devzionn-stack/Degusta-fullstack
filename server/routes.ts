@@ -2,8 +2,8 @@ import type { Express } from "express";
 import { type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { pedidos } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
+import { pedidos, tenants, estoque, ingredientes, alertasEstoque, produtoVariantes, combos, comboItens, produtos, webhookLogs } from "@shared/schema";
+import { and, eq, gte, desc, sql } from "drizzle-orm";
 import { hashPassword, comparePasswords, requireAuth, requireTenant, requireSuperAdmin, regenerateSession } from "./auth";
 import { validateN8nWebhook, generateApiKey } from "./webhook-security";
 import { sendToN8n, notifyN8nNewOrder } from "./n8n-requester";
@@ -21,6 +21,34 @@ import {
 } from "@shared/schema";
 import { iniciarRastreamento, generateSimulatedTrackingData } from "./n2n-service";
 import { fromZodError } from "zod-validation-error";
+import { z } from "zod";
+
+interface ErrorResponse {
+  error: string;
+  code: string;
+  details?: any;
+}
+
+function formatError(message: string, code: string, details?: any): ErrorResponse {
+  return { error: message, code, details };
+}
+
+function validateWithZod<T>(schema: z.ZodSchema<T>, data: unknown): { success: true; data: T } | { success: false; error: ErrorResponse } {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    return {
+      success: false,
+      error: formatError(
+        "Dados inválidos",
+        "VALIDATION_ERROR",
+        result.error.errors.map(e => ({ path: e.path.join('.'), message: e.message }))
+      ),
+    };
+  }
+  return { success: true, data: result.data };
+}
+
+const updateProdutoSchema = insertProdutoSchema.partial().omit({ tenantId: true });
 import { calcularDPT, obterDPTRealtime, registrarInicioPreparoPedido, registrarFimPreparoPedido } from "./dpt_calculator";
 import {
   geocodificarEndereco,
@@ -58,17 +86,22 @@ import {
   obterMetricasKDS,
 } from "./kds_service";
 import { consolidarDadosML, preverTempoPreparoPizza, preverTempoTotalPedido } from "./ml_pipeline";
+import { emitirPedidoCriado, emitirStatusAtualizado, reenviarWebhooksFalhados, gerarAssinaturaHMAC } from "./webhook_service";
+import { authRateLimit, apiRateLimit, webhookRateLimit } from "./rate_limiter";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   
+  // Rate limit global para todas as rotas /api/*
+  app.use("/api", apiRateLimit);
+  
   // ============================================
   // AUTH ROUTES
   // ============================================
   
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", authRateLimit, async (req, res) => {
     try {
       const validation = registerSchema.safeParse(req.body);
       if (!validation.success) {
@@ -116,7 +149,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", authRateLimit, async (req, res) => {
     try {
       const validation = loginSchema.safeParse(req.body);
       if (!validation.success) {
@@ -290,6 +323,176 @@ export async function registerRoutes(
     }
   });
 
+  app.put("/api/tenant/webhook", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { webhookUrl, webhookSecret } = req.body;
+      
+      const [atualizado] = await db
+        .update(tenants)
+        .set({ webhookUrl, webhookSecret })
+        .where(eq(tenants.id, tenantId))
+        .returning();
+      
+      res.json({ success: true, webhookUrl: atualizado.webhookUrl });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/webhooks/reenviar", webhookRateLimit, requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const reenviados = await reenviarWebhooksFalhados(tenantId);
+      res.json({ success: true, reenviados });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /api/webhooks/logs - listar histórico de webhooks
+  app.get("/api/webhooks/logs", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { evento, status, limite = 100, offset = 0 } = req.query;
+      
+      const conditions = [eq(webhookLogs.tenantId, tenantId)];
+      
+      if (evento) {
+        conditions.push(eq(webhookLogs.evento, evento as string));
+      }
+      if (status) {
+        conditions.push(eq(webhookLogs.status, status as string));
+      }
+      
+      const logs = await db.select().from(webhookLogs)
+        .where(and(...conditions))
+        .orderBy(desc(webhookLogs.createdAt))
+        .limit(Number(limite))
+        .offset(Number(offset));
+      
+      const [countResult] = await db
+        .select({ count: sql`count(*)` })
+        .from(webhookLogs)
+        .where(and(...conditions));
+      
+      res.json({
+        logs,
+        total: Number(countResult?.count || 0),
+        limite: Number(limite),
+        offset: Number(offset),
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /api/webhooks/logs/:id - detalhes de um webhook
+  app.get("/api/webhooks/logs/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      
+      const [log] = await db.select().from(webhookLogs)
+        .where(and(eq(webhookLogs.id, id), eq(webhookLogs.tenantId, tenantId)));
+      
+      if (!log) {
+        return res.status(404).json({ error: "Log não encontrado" });
+      }
+      
+      res.json(log);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/webhooks/logs/:id/replay - reenviar um webhook específico
+  app.post("/api/webhooks/logs/:id/replay", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      
+      const [log] = await db.select().from(webhookLogs)
+        .where(and(eq(webhookLogs.id, id), eq(webhookLogs.tenantId, tenantId)));
+      
+      if (!log) {
+        return res.status(404).json({ error: "Log não encontrado" });
+      }
+      
+      const [tenant] = await db.select().from(tenants)
+        .where(eq(tenants.id, tenantId)).limit(1);
+      
+      if (!tenant?.webhookUrl) {
+        return res.status(400).json({ error: "Webhook não configurado para este tenant" });
+      }
+      
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-Replay": "true",
+        "X-Original-Id": id,
+      };
+      
+      if (tenant.webhookSecret) {
+        headers["X-Webhook-Signature"] = gerarAssinaturaHMAC(log.payload, tenant.webhookSecret);
+      }
+      
+      const response = await fetch(tenant.webhookUrl, {
+        method: "POST",
+        headers,
+        body: log.payload,
+      });
+      
+      const [novoLog] = await db.insert(webhookLogs).values({
+        tenantId,
+        evento: log.evento + "_replay",
+        payload: log.payload,
+        status: response.ok ? "sucesso" : "falha",
+        statusCode: response.status,
+        resposta: await response.text().catch(() => ""),
+        tentativas: 1,
+      }).returning();
+      
+      res.json({ 
+        success: response.ok, 
+        novoLogId: novoLog.id,
+        statusCode: response.status,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /api/webhooks/stats - estatísticas de webhooks
+  app.get("/api/webhooks/stats", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      
+      const stats = await db
+        .select({
+          status: webhookLogs.status,
+          count: sql`count(*)`,
+        })
+        .from(webhookLogs)
+        .where(eq(webhookLogs.tenantId, tenantId))
+        .groupBy(webhookLogs.status);
+      
+      const ultimas24h = await db
+        .select({ count: sql`count(*)` })
+        .from(webhookLogs)
+        .where(and(
+          eq(webhookLogs.tenantId, tenantId),
+          sql`${webhookLogs.createdAt} >= NOW() - INTERVAL '24 hours'`
+        ));
+      
+      res.json({
+        porStatus: stats,
+        ultimas24h: Number(ultimas24h[0]?.count || 0),
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ============================================
   // CLIENTES ROUTES (Multi-tenant - uses req.user.tenantId ONLY)
   // ============================================
@@ -389,42 +592,53 @@ export async function registerRoutes(
   app.post("/api/produtos", requireAuth, requireTenant, async (req, res) => {
     try {
       const tenantId = req.user!.tenantId!;
-      const validation = insertProdutoSchema.safeParse({ ...req.body, tenantId });
+      const validation = validateWithZod(insertProdutoSchema, { ...req.body, tenantId });
       if (!validation.success) {
-        return res.status(400).json({ 
-          error: fromZodError(validation.error).toString() 
-        });
+        return res.status(400).json(validation.error);
       }
       const produto = await storage.createProduto(validation.data);
       res.status(201).json(produto);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to create produto" });
+    } catch (error: any) {
+      res.status(500).json(formatError(error.message || "Falha ao criar produto", "INTERNAL_ERROR"));
     }
   });
 
   app.patch("/api/produtos/:id", requireAuth, requireTenant, async (req, res) => {
     try {
       const tenantId = req.user!.tenantId!;
-      const produto = await storage.updateProduto(req.params.id, tenantId, req.body);
-      if (!produto) {
-        return res.status(404).json({ error: "Produto not found" });
+      const { id } = req.params;
+      
+      const validation = validateWithZod(updateProdutoSchema, req.body);
+      if (!validation.success) {
+        return res.status(400).json(validation.error);
       }
-      res.json(produto);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update produto" });
+      
+      const existente = await storage.getProduto(id, tenantId);
+      if (!existente) {
+        return res.status(404).json(formatError("Produto não encontrado", "NOT_FOUND"));
+      }
+      
+      const atualizado = await storage.updateProduto(id, tenantId, validation.data);
+      res.json(atualizado);
+    } catch (error: any) {
+      res.status(500).json(formatError(error.message || "Falha ao atualizar produto", "INTERNAL_ERROR"));
     }
   });
 
   app.delete("/api/produtos/:id", requireAuth, requireTenant, async (req, res) => {
     try {
       const tenantId = req.user!.tenantId!;
-      const success = await storage.deleteProduto(req.params.id, tenantId);
-      if (!success) {
-        return res.status(404).json({ error: "Produto not found" });
+      const { id } = req.params;
+      
+      const existente = await storage.getProduto(id, tenantId);
+      if (!existente) {
+        return res.status(404).json(formatError("Produto não encontrado", "NOT_FOUND"));
       }
-      res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete produto" });
+      
+      await storage.deleteProduto(id, tenantId);
+      res.json({ success: true, message: "Produto removido com sucesso" });
+    } catch (error: any) {
+      res.status(500).json(formatError(error.message || "Falha ao deletar produto", "INTERNAL_ERROR"));
     }
   });
 
@@ -502,6 +716,210 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // COMBOS ROUTES
+  // ============================================
+
+  app.get("/api/combos", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const lista = await db.select().from(combos).where(eq(combos.tenantId, tenantId));
+      res.json(lista);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/combos/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      
+      const [combo] = await db.select().from(combos)
+        .where(and(eq(combos.id, id), eq(combos.tenantId, tenantId)));
+      
+      if (!combo) {
+        return res.status(404).json({ error: "Combo não encontrado" });
+      }
+      
+      const itens = await db
+        .select({
+          id: comboItens.id,
+          quantidade: comboItens.quantidade,
+          produtoId: comboItens.produtoId,
+          produtoNome: produtos.nome,
+          produtoPreco: produtos.preco,
+        })
+        .from(comboItens)
+        .leftJoin(produtos, eq(comboItens.produtoId, produtos.id))
+        .where(eq(comboItens.comboId, id));
+      
+      res.json({ ...combo, itens });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/combos", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { nome, descricao, preco, imagemUrl, itens } = req.body;
+      
+      const [combo] = await db.insert(combos).values({
+        tenantId,
+        nome,
+        descricao,
+        preco,
+        imagemUrl,
+      }).returning();
+      
+      if (itens && itens.length > 0) {
+        for (const item of itens) {
+          await db.insert(comboItens).values({
+            tenantId,
+            comboId: combo.id,
+            produtoId: item.produtoId,
+            quantidade: item.quantidade || 1,
+          });
+        }
+      }
+      
+      res.json(combo);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/combos/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      const { nome, descricao, preco, imagemUrl, ativo, itens } = req.body;
+      
+      const [combo] = await db.update(combos)
+        .set({ nome, descricao, preco, imagemUrl, ativo })
+        .where(and(eq(combos.id, id), eq(combos.tenantId, tenantId)))
+        .returning();
+      
+      if (!combo) {
+        return res.status(404).json({ error: "Combo não encontrado" });
+      }
+      
+      if (itens) {
+        await db.delete(comboItens).where(eq(comboItens.comboId, id));
+        for (const item of itens) {
+          await db.insert(comboItens).values({
+            tenantId,
+            comboId: id,
+            produtoId: item.produtoId,
+            quantidade: item.quantidade || 1,
+          });
+        }
+      }
+      
+      res.json(combo);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/combos/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      
+      await db.delete(combos).where(and(eq(combos.id, id), eq(combos.tenantId, tenantId)));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============================================
+  // PRODUTO VARIANTES ROUTES
+  // ============================================
+
+  app.get("/api/produtos/:produtoId/variantes", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { produtoId } = req.params;
+      
+      const variantes = await db
+        .select()
+        .from(produtoVariantes)
+        .where(and(
+          eq(produtoVariantes.tenantId, tenantId),
+          eq(produtoVariantes.produtoId, produtoId)
+        ))
+        .orderBy(produtoVariantes.tipo, produtoVariantes.ordem);
+      
+      res.json(variantes);
+    } catch (error: any) {
+      res.status(500).json(formatError(error.message, "INTERNAL_ERROR"));
+    }
+  });
+
+  app.post("/api/produtos/:produtoId/variantes", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { produtoId } = req.params;
+      const { tipo, nome, precoAdicional, ativo, ordem } = req.body;
+      
+      const [variante] = await db.insert(produtoVariantes).values({
+        tenantId,
+        produtoId,
+        tipo,
+        nome,
+        precoAdicional: precoAdicional || "0",
+        ativo: ativo ?? true,
+        ordem: ordem || 0,
+      }).returning();
+      
+      res.json(variante);
+    } catch (error: any) {
+      res.status(400).json(formatError(error.message, "CREATE_ERROR"));
+    }
+  });
+
+  app.put("/api/variantes/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      
+      const [atualizada] = await db
+        .update(produtoVariantes)
+        .set(req.body)
+        .where(and(eq(produtoVariantes.id, id), eq(produtoVariantes.tenantId, tenantId)))
+        .returning();
+      
+      if (!atualizada) {
+        return res.status(404).json(formatError("Variante não encontrada", "NOT_FOUND"));
+      }
+      res.json(atualizada);
+    } catch (error: any) {
+      res.status(400).json(formatError(error.message, "UPDATE_ERROR"));
+    }
+  });
+
+  app.delete("/api/variantes/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      
+      const [deletada] = await db
+        .delete(produtoVariantes)
+        .where(and(eq(produtoVariantes.id, id), eq(produtoVariantes.tenantId, tenantId)))
+        .returning();
+      
+      if (!deletada) {
+        return res.status(404).json(formatError("Variante não encontrada", "NOT_FOUND"));
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json(formatError(error.message, "DELETE_ERROR"));
+    }
+  });
+
   app.get("/api/produtos/:id/custo", requireAuth, requireTenant, async (req, res) => {
     try {
       const tenantId = req.user!.tenantId!;
@@ -566,6 +984,11 @@ export async function registerRoutes(
         });
       }
       const pedido = await storage.createPedido(validation.data);
+      
+      emitirPedidoCriado(tenantId, pedido).catch(err => 
+        console.error("[Webhook] Erro ao emitir pedido_criado:", err)
+      );
+      
       res.status(201).json(pedido);
     } catch (error) {
       res.status(500).json({ error: "Failed to create pedido" });
@@ -581,6 +1004,12 @@ export async function registerRoutes(
       }
       
       broadcastOrderStatusChange(tenantId, pedido);
+      
+      if (req.body.status) {
+        emitirStatusAtualizado(tenantId, pedido.id, pedido.status).catch(err =>
+          console.error("[Webhook] Erro ao emitir status_atualizado:", err)
+        );
+      }
       
       res.json(pedido);
     } catch (error) {
@@ -618,6 +1047,10 @@ export async function registerRoutes(
       }
       
       broadcastOrderStatusChange(tenantId, pedido);
+      
+      emitirStatusAtualizado(tenantId, pedido.id, status).catch(err =>
+        console.error("[Webhook] Erro ao emitir status_atualizado:", err)
+      );
       
       res.json(pedido);
     } catch (error) {
@@ -675,6 +1108,87 @@ export async function registerRoutes(
       res.json(estoqueItem);
     } catch (error) {
       res.status(500).json({ error: "Failed to update estoque" });
+    }
+  });
+
+  app.get("/api/estoque/baixo", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      
+      const itensEstoqueBaixo = await db
+        .select({
+          estoqueId: estoque.id,
+          ingredienteId: estoque.ingredienteId,
+          ingredienteNome: ingredientes.nome,
+          quantidadeAtual: estoque.quantidade,
+          quantidadeMinima: estoque.quantidadeMinima,
+          unidade: ingredientes.unidade,
+        })
+        .from(estoque)
+        .leftJoin(ingredientes, eq(estoque.ingredienteId, ingredientes.id))
+        .where(and(
+          eq(estoque.tenantId, tenantId),
+          sql`${estoque.quantidade} <= ${estoque.quantidadeMinima}`
+        ));
+      
+      res.json(itensEstoqueBaixo);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/estoque/alertas", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      
+      const alertas = await db
+        .select()
+        .from(alertasEstoque)
+        .where(and(
+          eq(alertasEstoque.tenantId, tenantId),
+          gte(alertasEstoque.createdAt, sql`NOW() - INTERVAL '24 hours'`)
+        ))
+        .orderBy(desc(alertasEstoque.createdAt));
+      
+      res.json(alertas);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/estoque/verificar-alertas", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      
+      const itensEstoqueBaixo = await db
+        .select({
+          estoqueId: estoque.id,
+          ingredienteId: estoque.ingredienteId,
+          ingredienteNome: ingredientes.nome,
+          quantidadeAtual: estoque.quantidade,
+          quantidadeMinima: estoque.quantidadeMinima,
+        })
+        .from(estoque)
+        .leftJoin(ingredientes, eq(estoque.ingredienteId, ingredientes.id))
+        .where(and(
+          eq(estoque.tenantId, tenantId),
+          sql`${estoque.quantidade} <= ${estoque.quantidadeMinima}`
+        ));
+      
+      const alertasCriados = [];
+      for (const item of itensEstoqueBaixo) {
+        const [alerta] = await db.insert(alertasEstoque).values({
+          tenantId,
+          ingredienteId: item.ingredienteId,
+          tipo: "estoque_baixo",
+          mensagem: `Estoque baixo: ${item.ingredienteNome} - ${item.quantidadeAtual} (mínimo: ${item.quantidadeMinima})`,
+        }).returning();
+        alertasCriados.push(alerta);
+      }
+      
+      res.json({ alertas: alertasCriados, total: alertasCriados.length });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

@@ -8,6 +8,8 @@ export const tenants = pgTable("tenants", {
   nome: text("nome").notNull(),
   apiKeyN8n: text("api_key_n8n"),
   n8nWebhookUrl: text("n8n_webhook_url"),
+  webhookUrl: text("webhook_url"),
+  webhookSecret: text("webhook_secret"),
   status: text("status").notNull().default('active'),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -53,12 +55,25 @@ export const produtos = pgTable("produtos", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const produtoVariantes = pgTable("produto_variantes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  produtoId: varchar("produto_id").notNull().references(() => produtos.id, { onDelete: "cascade" }),
+  tipo: text("tipo").notNull(),
+  nome: text("nome").notNull(),
+  precoAdicional: decimal("preco_adicional", { precision: 10, scale: 2 }).default("0"),
+  ativo: boolean("ativo").default(true),
+  ordem: integer("ordem").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const estoque = pgTable("estoque", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   produtoId: varchar("produto_id").references(() => produtos.id, { onDelete: "cascade" }),
   ingredienteId: varchar("ingrediente_id"),
   quantidade: integer("quantidade").notNull().default(0),
+  quantidadeMinima: integer("quantidade_minima").default(0),
   unidade: text("unidade").default('un'),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -310,6 +325,28 @@ export const alertasKDSEnviados = pgTable("alertas_kds_enviados", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const webhookLogs = pgTable("webhook_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  evento: text("evento").notNull(),
+  payload: text("payload").notNull(),
+  status: text("status").notNull(),
+  statusCode: integer("status_code"),
+  resposta: text("resposta"),
+  tentativas: integer("tentativas").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const alertasEstoque = pgTable("alertas_estoque", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  ingredienteId: varchar("ingrediente_id"),
+  tipo: text("tipo").notNull(),
+  mensagem: text("mensagem").notNull(),
+  lido: boolean("lido").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertTenantSchema = createInsertSchema(tenants).omit({
   id: true,
   createdAt: true,
@@ -338,6 +375,11 @@ export const insertClienteSchema = createInsertSchema(clientes).omit({
 });
 
 export const insertProdutoSchema = createInsertSchema(produtos).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProdutoVarianteSchema = createInsertSchema(produtoVariantes).omit({
   id: true,
   createdAt: true,
 });
@@ -438,6 +480,9 @@ export type InsertCliente = z.infer<typeof insertClienteSchema>;
 export type Produto = typeof produtos.$inferSelect;
 export type InsertProduto = z.infer<typeof insertProdutoSchema>;
 
+export type ProdutoVariante = typeof produtoVariantes.$inferSelect;
+export type InsertProdutoVariante = z.infer<typeof insertProdutoVarianteSchema>;
+
 export type Estoque = typeof estoque.$inferSelect;
 export type InsertEstoque = z.infer<typeof insertEstoqueSchema>;
 
@@ -522,6 +567,14 @@ export const insertAlertasKDSEnviadosSchema = createInsertSchema(alertasKDSEnvia
   createdAt: true,
 });
 
+export const insertWebhookLogSchema = createInsertSchema(webhookLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type WebhookLog = typeof webhookLogs.$inferSelect;
+export type InsertWebhookLog = z.infer<typeof insertWebhookLogSchema>;
+
 export type ProgressoKDS = typeof progressoKDS.$inferSelect;
 export type InsertProgressoKDS = z.infer<typeof insertProgressoKDSSchema>;
 
@@ -567,3 +620,35 @@ export const insertTemplateEtapasKDSSchema = createInsertSchema(templatesEtapasK
 
 export type TemplateEtapasKDS = typeof templatesEtapasKDS.$inferSelect;
 export type InsertTemplateEtapasKDS = z.infer<typeof insertTemplateEtapasKDSSchema>;
+
+export const combos = pgTable("combos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  nome: text("nome").notNull(),
+  descricao: text("descricao"),
+  preco: decimal("preco", { precision: 10, scale: 2 }).notNull(),
+  imagemUrl: text("imagem_url"),
+  ativo: boolean("ativo").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const comboItens = pgTable("combo_itens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  comboId: varchar("combo_id").notNull().references(() => combos.id, { onDelete: "cascade" }),
+  produtoId: varchar("produto_id").notNull().references(() => produtos.id, { onDelete: "cascade" }),
+  quantidade: integer("quantidade").default(1),
+});
+
+export const insertComboSchema = createInsertSchema(combos).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertCombo = z.infer<typeof insertComboSchema>;
+export type Combo = typeof combos.$inferSelect;
+
+export const insertComboItemSchema = createInsertSchema(comboItens).omit({
+  id: true,
+});
+export type InsertComboItem = z.infer<typeof insertComboItemSchema>;
+export type ComboItem = typeof comboItens.$inferSelect;

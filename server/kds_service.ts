@@ -3,6 +3,7 @@ import { progressoKDS, historicoTimingKDS, pedidos, produtos, templatesEtapasKDS
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { ProgressoKDS } from "@shared/schema";
 import { broadcastNovoPedidoKDS, broadcastEtapaAvancadaKDS, broadcastPizzaProntaKDS, broadcastPedidoCancelado, broadcastPedidoSaiuEntrega } from "./websocket";
+import { emitirPizzaIniciada, emitirEtapaConcluida, emitirPizzaConcluida } from "./webhook_service";
 
 export interface EtapaKDS {
   nome: string;
@@ -260,6 +261,15 @@ export async function iniciarPreparoKDS(progressoId: string, tenantId: string): 
     .where(eq(progressoKDS.id, progressoId))
     .returning();
 
+  // Emitir webhook de pizza iniciada
+  if (progresso.produtoId && progresso.produtoNome) {
+    emitirPizzaIniciada(tenantId, {
+      pedidoId: progresso.pedidoId,
+      produtoId: progresso.produtoId,
+      produtoNome: progresso.produtoNome,
+    }).catch(console.error);
+  }
+
   // Notificar via WebSocket
   broadcastEtapaAvancadaKDS(tenantId, progressoId, 0);
 
@@ -374,6 +384,30 @@ export async function avancarEtapaKDS(progressoId: string, tenantId: string): Pr
   // Dar baixa no estoque quando pizza for concluída
   if (novoStatus === "concluido" && progresso.produtoId) {
     await darBaixaEstoquePizza(tenantId, progresso.produtoId);
+  }
+
+  // Emitir webhook de etapa concluída
+  emitirEtapaConcluida(tenantId, {
+    pedidoId: progresso.pedidoId,
+    produtoId: progresso.produtoId || "",
+    produtoNome: progresso.produtoNome,
+    etapaNome: etapaAtual.nome,
+    etapaNumero: etapaAtualIndex + 1,
+    totalEtapas: etapas.length,
+    tempoReal: etapaAtual.tempoReal || 0,
+    tempoEstimado: etapaAtual.tempoSegundos,
+  }).catch(console.error);
+
+  // Se for última etapa (concluído), emitir webhook de pizza concluída
+  if (novoStatus === "concluido" && progresso.iniciadoEm) {
+    const inicio = new Date(progresso.iniciadoEm);
+    const tempoTotal = Math.floor((new Date().getTime() - inicio.getTime()) / 1000);
+    emitirPizzaConcluida(tenantId, {
+      pedidoId: progresso.pedidoId,
+      produtoId: progresso.produtoId || "",
+      produtoNome: progresso.produtoNome,
+      tempoTotal,
+    }).catch(console.error);
   }
 
   // Notificar via WebSocket

@@ -12,6 +12,7 @@ import { getSessionSecret } from "./session-config";
 import { iniciarCronETA } from "./eta_cron";
 import { iniciarCronAlertaChegada } from "./alerta_chegada";
 import { iniciarCronML } from "./ml_pipeline";
+import { iniciarCronReenvioWebhooks } from "./webhook_service";
 
 const app = express();
 const httpServer = createServer(app);
@@ -137,6 +138,7 @@ app.use((req, res, next) => {
       iniciarCronETA();
       iniciarCronAlertaChegada();
       iniciarCronML();
+      iniciarCronReenvioWebhooks();
     },
   );
 })();
