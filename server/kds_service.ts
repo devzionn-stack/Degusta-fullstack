@@ -39,7 +39,7 @@ export async function listarPedidosAtivosKDS(tenantId: string): Promise<PedidoKD
     .where(
       and(
         eq(pedidos.tenantId, tenantId),
-        inArray(pedidos.status, ["recebido", "em_preparo", "pendente", "confirmado"])
+        inArray(pedidos.status, ["recebido", "em_preparo", "pendente", "confirmado", "preparando"])
       )
     )
     .orderBy(sql`${pedidos.createdAt} ASC`);

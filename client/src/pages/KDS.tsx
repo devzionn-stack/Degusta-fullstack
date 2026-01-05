@@ -242,7 +242,8 @@ export default function KDS() {
     return () => {
       websocket.close();
     };
-  }, [sounds, carregarPedidos]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleIniciar = async (progressoId: string) => {
     try {
