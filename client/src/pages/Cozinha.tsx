@@ -463,6 +463,16 @@ export default function Cozinha() {
             <RefreshCw className="w-4 h-4 mr-2" />
             Atualizar
           </Button>
+
+          <Button 
+            onClick={() => navigate("/kds/tv")}
+            className="bg-orange-600 hover:bg-orange-700"
+            size="sm"
+            data-testid="button-ir-tv"
+          >
+            <Tv className="w-4 h-4 mr-2" />
+            Abrir TV
+          </Button>
         </div>
       </div>
 
