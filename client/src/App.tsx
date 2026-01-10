@@ -17,6 +17,7 @@ import PedidoDetails from "@/pages/PedidoDetails";
 import Logistica from "@/pages/Logistica";
 import Financeiro from "@/pages/Financeiro";
 import Inteligencia from "@/pages/Inteligencia";
+import Analytics from "@/pages/Analytics";
 import Estoque from "@/pages/Estoque";
 import Custos from "@/pages/Custos";
 import AgenteIA from "@/pages/AgenteIA";
@@ -52,6 +53,7 @@ function Router() {
       <Route path="/dashboard/logistica" component={Logistica} />
       <Route path="/dashboard/financeiro" component={Financeiro} />
       <Route path="/dashboard/inteligencia" component={Inteligencia} />
+      <Route path="/dashboard/analytics" component={Analytics} />
       <Route path="/dashboard/estoque" component={Estoque} />
       <Route path="/dashboard/clientes" component={Clientes} />
       <Route path="/dashboard/produtos" component={Produtos} />

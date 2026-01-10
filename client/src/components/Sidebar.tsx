@@ -35,6 +35,7 @@ import {
   Bot,
   Moon,
   Sun,
+  BarChart3,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,6 +64,7 @@ const navItems = [
   { icon: Truck, label: "Logística", path: "/dashboard/logistica" },
   { icon: DollarSign, label: "Financeiro", path: "/dashboard/financeiro" },
   { icon: Brain, label: "Inteligência", path: "/dashboard/inteligencia" },
+  { icon: BarChart3, label: "Analytics", path: "/dashboard/analytics" },
   { icon: Settings, label: "Configurações", path: "/dashboard/configuracoes" },
 ];
 

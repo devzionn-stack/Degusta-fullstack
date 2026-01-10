@@ -72,6 +72,18 @@ import {
 } from "./custo_lucro";
 import { webhookCustoMercadoSchema } from "@shared/schema";
 import { 
+  buscarMetricasCliente,
+  buscarRankingClientes,
+  buscarResumoClientes,
+} from "./cliente_metrics_service";
+import {
+  buscarPizzasPopulares,
+  buscarTendenciaDiaria,
+  buscarTendenciaSabores,
+  buscarAnalyticsSummary,
+  buscarConsumoIngredientes,
+} from "./pizza_analytics_service";
+import { 
   processarMensagemIA, 
   atualizarEstoqueIngrediente as atualizarEstoqueIngredienteAPI, 
   cancelarMotoboy as cancelarMotoboyAPI 
@@ -559,6 +571,41 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete cliente" });
+    }
+  });
+
+  app.get("/api/clientes/metricas/resumo", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const resumo = await buscarResumoClientes(tenantId);
+      res.json(resumo);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/clientes/metricas/ranking", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const limite = parseInt(req.query.limite as string) || 20;
+      const ordenarPor = (req.query.ordenarPor as "gasto" | "pedidos" | "ticket") || "gasto";
+      const ranking = await buscarRankingClientes(tenantId, limite, ordenarPor);
+      res.json(ranking);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/clientes/:id/metricas", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const metricas = await buscarMetricasCliente(tenantId, req.params.id);
+      if (!metricas) {
+        return res.status(404).json({ error: "Cliente não encontrado" });
+      }
+      res.json(metricas);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 
@@ -3760,6 +3807,65 @@ export async function registerRoutes(
       const { gerarDiagramaPizza } = await import("./diagrama_pizza_service");
       const diagrama = await gerarDiagramaPizza(tenantId, sabores);
       res.json(diagrama);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================
+  // ANALYTICS - PIZZAS PERSONALIZADAS
+  // ============================================
+
+  app.get("/api/analytics/resumo", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const resumo = await buscarAnalyticsSummary(tenantId);
+      res.json(resumo);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/analytics/pizzas-populares", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const limite = parseInt(req.query.limite as string) || 10;
+      const dias = parseInt(req.query.dias as string) || 30;
+      const pizzas = await buscarPizzasPopulares(tenantId, limite, dias);
+      res.json(pizzas);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/analytics/tendencia-diaria", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const dias = parseInt(req.query.dias as string) || 30;
+      const tendencia = await buscarTendenciaDiaria(tenantId, dias);
+      res.json(tendencia);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/analytics/tendencia-sabores", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const dias = parseInt(req.query.dias as string) || 30;
+      const tendencia = await buscarTendenciaSabores(tenantId, dias);
+      res.json(tendencia);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/analytics/consumo-ingredientes", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const dias = parseInt(req.query.dias as string) || 30;
+      const consumo = await buscarConsumoIngredientes(tenantId, dias);
+      res.json(consumo);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
