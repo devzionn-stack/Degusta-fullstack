@@ -8,6 +8,20 @@ Degusta Pizzas is a full-stack multi-tenant pizzeria management system designed 
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (January 2026)
+
+### Phase 3 - CRM & Analytics
+- **CRM Metrics Service** (`server/cliente_metrics_service.ts`): Customer analytics with ticket médio, frequência, custo/lucro per customer
+- **Pizza Analytics Service** (`server/pizza_analytics_service.ts`): Personalized pizza trends, sales evolution, ingredient consumption
+- **Analytics Dashboard** (`client/src/pages/Analytics.tsx`): Recharts visualizations for sales, popular pizzas, flavor trends
+
+### KDS AI-Guided Preparation
+- **KDS IA Service** (`server/kds_ia_service.ts`): OpenAI-powered step-by-step pizza preparation instructions
+- **KDS Production TV** (`client/src/pages/KDSProducaoTV.tsx`): Real-time WebSocket updates, AI instructions panel, progress tracking
+
+### Security Improvements
+- **RLS Enabled**: Row Level Security activated on `pedidos`, `clientes`, `produtos`, `estoque` tables
+
 ## System Architecture
 
 ### Frontend Architecture
@@ -20,15 +34,70 @@ The backend is developed with Express.js and TypeScript. It implements session-b
 
 ### Database Architecture
 
-PostgreSQL (via Neon serverless with WebSocket support) is the chosen database, managed with Drizzle ORM for type-safe queries and migrations. The schema, defined in `shared/schema.ts`, includes core tables like `tenants`, `users`, `clientes`, `produtos`, `estoque`, `pedidos`, `historico_preparo`, `motoboys`, `transacoes`, `feedbacks`, `previsao_estoque`, and `alertas_frota`. All business-critical tables include a `tenant_id` foreign key for multi-tenancy. Row Level Security (RLS) policies are extensively used on tenant-scoped tables to ensure data isolation, automatically filtering rows based on the current tenant's session context.
+PostgreSQL (via Neon serverless with WebSocket support) is the chosen database, managed with Drizzle ORM for type-safe queries and migrations. The schema, defined in `shared/schema.ts`, includes core tables like `tenants`, `users`, `clientes`, `produtos`, `estoque`, `pedidos`, `historico_preparo`, `motoboys`, `transacoes`, `feedbacks`, `previsao_estoque`, and `alertas_frota`. All business-critical tables include a `tenant_id` foreign key for multi-tenancy. Row Level Security (RLS) policies are extensively used on tenant-scoped tables to ensure data isolation.
 
-### System Design Choices
+## API Reference
 
-- **Dynamic Prep Time (DPT) System**: A machine learning-based system (`server/dpt_calculator.ts`) estimates and tracks pizza preparation times using historical data and queue analysis. It includes real-time monitoring and priority-based sorting for kitchen workflow optimization.
-- **Kitchen Display System (KDS)**: The `client/src/pages/Cozinha.tsx` page provides a real-time KDS with WebSocket updates, sound alerts for new orders, progress bars, and urgency indicators, integrated with the DPT system.
-- **Geo Fleet Management System**: Services (`server/geo_service.ts`, `server/despacho.ts`, `server/eta_cron.ts`) integrate with Google Maps API for geocoding, routing, ETA calculation, and geofencing. It manages motoboy dispatch, real-time ETA tracking, and provides alerts for deviations.
-- **Intelligent Stock and Cost Management System**: The `server/custo_lucro.ts` service tracks real-time market prices, historical costs, and performs profit analysis across franchises, products, and ingredients. It supports N8N webhooks for price updates.
-- **Proactive Customer Communication System**: The `server/alerta_chegada.ts` service manages automated customer alerts for delivery, including ETA-10 minute notifications and 50-meter geofence "pizza arriving" alerts, integrated with N8N for WhatsApp messaging.
+### Authentication
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/login` | POST | User login |
+| `/api/auth/register` | POST | Register new franchise |
+| `/api/auth/logout` | POST | Logout |
+| `/api/auth/me` | GET | Current user info |
+
+### Customer Metrics (CRM)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/clientes/metricas/resumo` | GET | Summary: total clients, active 30d, revenue |
+| `/api/clientes/metricas/ranking` | GET | Top 10 customers by spending/orders |
+| `/api/clientes/metricas/:id/metricas` | GET | Detailed metrics for specific customer |
+
+### Pizza Analytics
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/analytics/resumo` | GET | Summary: peak hour, popular day, monthly growth |
+| `/api/analytics/pizzas-populares` | GET | Most sold personalized pizzas |
+| `/api/analytics/tendencia-diaria` | GET | Daily sales evolution |
+| `/api/analytics/tendencia-sabores` | GET | Flavor trends (rising/falling/stable) |
+| `/api/analytics/consumo-ingredientes` | GET | Ingredient consumption with costs |
+
+### KDS & Pizza Diagrams
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/diagrama/fila` | GET | Production queue |
+| `/api/diagrama/item/:itemId` | GET | Pizza diagram for item |
+| `/api/diagrama/instrucoes/:itemId` | GET | AI-generated preparation instructions |
+| `/api/diagrama/iniciar/:itemId` | POST | Start pizza production |
+| `/api/diagrama/finalizar/:itemId` | POST | Complete pizza production |
+| `/api/diagrama/gerar` | POST | Generate pizza diagram from flavors |
+
+### External Integrations (WhatsApp, N8N, CrewAI)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/externo/pedido` | POST | Create order from external source |
+| `/api/externo/webhook/status` | POST | Receive status updates |
+
+## WebSocket Events
+
+Connect to `/ws/pedidos` for real-time updates:
+
+| Event Type | Description |
+|------------|-------------|
+| `connected` | Connection established |
+| `pedido_update` | Order created/updated/deleted |
+| `novo_pedido_kds` | New order in kitchen queue |
+| `etapa_avancada_kds` | Preparation step advanced |
+| `pizza_pronta_kds` | Pizza completed |
+
+## System Design Choices
+
+- **Dynamic Prep Time (DPT) System**: A machine learning-based system (`server/dpt_calculator.ts`) estimates and tracks pizza preparation times using historical data and queue analysis.
+- **Kitchen Display System (KDS)**: Real-time KDS with WebSocket updates, sound alerts, AI-guided preparation instructions, and progress tracking.
+- **AI-Guided Preparation** (`server/kds_ia_service.ts`): OpenAI integration generates step-by-step instructions for pizza assembly, optimized for multi-flavor pizzas with fractions (1/2, 1/3, 1/4).
+- **Geo Fleet Management System**: Services integrate with Google Maps API for geocoding, routing, ETA calculation, and geofencing.
+- **Intelligent Stock and Cost Management System**: Tracks real-time market prices, historical costs, and performs profit analysis.
+- **Proactive Customer Communication System**: Automated customer alerts for delivery, integrated with N8N for WhatsApp messaging.
 
 ## External Dependencies
 
@@ -37,5 +106,67 @@ PostgreSQL (via Neon serverless with WebSocket support) is the chosen database, 
 - **UI Libraries**: Radix UI (`@radix-ui/*`), Lucide React (icons), class-variance-authority (CVA), tailwind-merge, clsx.
 - **Validation & Forms**: Zod, React Hook Form, `@hookform/resolvers`.
 - **Database**: `@neondatabase/serverless` (PostgreSQL), drizzle-orm, drizzle-kit, connect-pg-simple.
+- **AI Integration**: OpenAI via Replit AI Integrations (gpt-4o-mini for KDS, gpt-5 for agent).
 - **Session Management**: express-session.
 - **External Service Integrations**: N8N workflow automation (tenant-specific API keys), Google Maps API (optional for Geo services).
+
+## Known Issues
+
+- **Vite HMR WebSocket**: Hot Module Replacement WebSocket may fail in Replit environment. This is a development-only issue and does not affect application functionality.
+
+## Integration Guide
+
+### Creating Orders via API (WhatsApp/N8N)
+
+```json
+POST /api/externo/pedido
+Headers: {
+  "X-Api-Key": "<tenant-api-key>",
+  "Content-Type": "application/json"
+}
+Body: {
+  "cliente": {
+    "nome": "João Silva",
+    "telefone": "11999999999"
+  },
+  "itens": [
+    {
+      "tipo": "pizza",
+      "sabores": [
+        { "pizza_id": "<produto-uuid>", "fracao": 0.5 },
+        { "pizza_id": "<produto-uuid>", "fracao": 0.5 }
+      ],
+      "quantidade": 1
+    }
+  ],
+  "tipo_entrega": "delivery",
+  "endereco": "Rua Exemplo, 123"
+}
+```
+
+### Receiving AI Instructions
+
+```json
+GET /api/diagrama/instrucoes/:itemId
+Response: {
+  "titulo": "Calabresa + Mussarela",
+  "passos": [
+    { "numero": 1, "instrucao": "Abra a massa...", "tempo": 30 },
+    { "numero": 2, "instrucao": "Espalhe o molho...", "tempo": 20 }
+  ],
+  "tempoEstimado": 180,
+  "dicasGerais": ["Mantenha ingredientes frescos..."]
+}
+```
+
+### WebSocket Connection
+
+```javascript
+const ws = new WebSocket('wss://your-domain/ws/pedidos');
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.type === 'novo_pedido_kds') {
+    // Refresh kitchen queue
+  }
+};
+```

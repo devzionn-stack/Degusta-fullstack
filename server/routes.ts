@@ -3812,6 +3812,34 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/diagrama/instrucoes/:itemId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { buscarDiagramaItemPedido } = await import("./diagrama_pizza_service");
+      const { gerarInstrucoesPreparo } = await import("./kds_ia_service");
+      
+      const diagrama = await buscarDiagramaItemPedido(tenantId, req.params.itemId);
+      if (!diagrama) {
+        return res.status(404).json({ error: "Item não encontrado" });
+      }
+      
+      const sabores = diagrama.sabores.map(s => ({
+        produtoNome: s.produtoNome,
+        fracao: s.fracao,
+        ingredientes: s.ingredientes.map(i => ({
+          nome: i.nome,
+          quantidade: i.quantidade,
+          unidade: i.unidade
+        }))
+      }));
+      
+      const instrucoes = await gerarInstrucoesPreparo(diagrama.nome, sabores);
+      res.json(instrucoes);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ============================================
   // ANALYTICS - PIZZAS PERSONALIZADAS
   // ============================================

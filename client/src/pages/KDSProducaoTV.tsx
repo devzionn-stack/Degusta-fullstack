@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,12 @@ import {
   Minimize,
   Volume2,
   VolumeX,
-  RefreshCw
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  Brain,
+  Loader2,
+  Lightbulb
 } from "lucide-react";
 
 interface Ingrediente {
@@ -50,6 +55,21 @@ interface FilaProducao {
   fila: DiagramaPizza[];
 }
 
+interface PassoPreparo {
+  numero: number;
+  instrucao: string;
+  tempo?: number;
+  dica?: string;
+  ingredientes?: string[];
+}
+
+interface InstrucoesPreparo {
+  titulo: string;
+  passos: PassoPreparo[];
+  tempoEstimado: number;
+  dicasGerais: string[];
+}
+
 export default function KDSProducaoTV() {
   const params = useParams<{ tenantId?: string }>();
   const [filaProducao, setFilaProducao] = useState<FilaProducao>({ emProducao: null, fila: [] });
@@ -57,6 +77,11 @@ export default function KDSProducaoTV() {
   const [somAtivo, setSomAtivo] = useState(true);
   const [tempoDecorrido, setTempoDecorrido] = useState(0);
   const [carregando, setCarregando] = useState(true);
+  const [wsConectado, setWsConectado] = useState(false);
+  const [instrucoes, setInstrucoes] = useState<InstrucoesPreparo | null>(null);
+  const [carregandoInstrucoes, setCarregandoInstrucoes] = useState(false);
+  const [passoAtual, setPassoAtual] = useState(0);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const carregarFila = useCallback(async (): Promise<FilaProducao | null> => {
     try {
@@ -83,11 +108,95 @@ export default function KDSProducaoTV() {
     }
   }, [params.tenantId]);
 
+  const carregarInstrucoes = useCallback(async (itemPedidoId: string) => {
+    setCarregandoInstrucoes(true);
+    setInstrucoes(null);
+    setPassoAtual(0);
+    try {
+      const response = await fetch(`/api/diagrama/instrucoes/${itemPedidoId}`, {
+        credentials: "include",
+        headers: params.tenantId ? { "X-Tenant-Id": params.tenantId } : {},
+      });
+
+      if (response.ok) {
+        const data: InstrucoesPreparo = await response.json();
+        setInstrucoes(data);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar instruções:", error);
+    } finally {
+      setCarregandoInstrucoes(false);
+    }
+  }, [params.tenantId]);
+
+  useEffect(() => {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws/pedidos`;
+    
+    const connectWebSocket = () => {
+      try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+        
+        ws.onopen = () => {
+          console.log("[KDS] WebSocket conectado");
+          setWsConectado(true);
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === "novo_pedido_kds" || 
+                data.type === "etapa_avancada_kds" || 
+                data.type === "pizza_pronta_kds" ||
+                data.type === "pedido_update") {
+              carregarFila();
+            }
+          } catch (e) {
+            console.error("[KDS] Erro ao processar mensagem WS:", e);
+          }
+        };
+        
+        ws.onclose = () => {
+          console.log("[KDS] WebSocket desconectado, reconectando...");
+          setWsConectado(false);
+          setTimeout(connectWebSocket, 3000);
+        };
+        
+        ws.onerror = (error) => {
+          console.error("[KDS] Erro WebSocket:", error);
+          setWsConectado(false);
+        };
+      } catch (error) {
+        console.error("[KDS] Erro ao criar WebSocket:", error);
+        setTimeout(connectWebSocket, 3000);
+      }
+    };
+    
+    connectWebSocket();
+    
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [carregarFila]);
+
   useEffect(() => {
     carregarFila();
-    const interval = setInterval(carregarFila, 10000);
+    const interval = setInterval(carregarFila, 30000);
     return () => clearInterval(interval);
   }, [carregarFila]);
+
+  useEffect(() => {
+    if (filaProducao.emProducao) {
+      carregarInstrucoes(filaProducao.emProducao.itemPedidoId);
+    } else {
+      setInstrucoes(null);
+      setPassoAtual(0);
+    }
+  }, [filaProducao.emProducao?.itemPedidoId, carregarInstrucoes]);
 
   useEffect(() => {
     if (!filaProducao.emProducao) {
@@ -162,6 +271,19 @@ export default function KDSProducaoTV() {
     }
   };
 
+  const avancarPasso = () => {
+    if (instrucoes && passoAtual < instrucoes.passos.length - 1) {
+      setPassoAtual(prev => prev + 1);
+      tocarSom();
+    }
+  };
+
+  const voltarPasso = () => {
+    if (passoAtual > 0) {
+      setPassoAtual(prev => prev - 1);
+    }
+  };
+
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
@@ -204,11 +326,20 @@ export default function KDSProducaoTV() {
           <ChefHat className="w-10 h-10 text-orange-500" />
           <div>
             <h1 className="text-3xl font-bold">SISTEMA DE MONTAGEM</h1>
-            <p className="text-gray-400">Pizza Passo a Passo</p>
+            <p className="text-gray-400">Pizza Passo a Passo com IA</p>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
+          <Badge 
+            variant="outline" 
+            className={`px-3 py-1 ${wsConectado ? 'border-green-500 text-green-500' : 'border-red-500 text-red-500'}`}
+            data-testid="status-websocket"
+          >
+            {wsConectado ? <Wifi className="w-4 h-4 mr-1" /> : <WifiOff className="w-4 h-4 mr-1" />}
+            {wsConectado ? "Live" : "Offline"}
+          </Badge>
+
           <Badge variant="outline" className="text-xl px-4 py-2 border-orange-500 text-orange-500">
             <Clock className="w-5 h-5 mr-2" />
             {formatarTempo(tempoDecorrido)}
@@ -245,7 +376,7 @@ export default function KDSProducaoTV() {
 
       {filaProducao.emProducao ? (
         <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-8">
+          <div className="col-span-5">
             <Card className="bg-gray-900 border-gray-800 p-6">
               <div className="flex justify-between items-center mb-4">
                 <div>
@@ -272,7 +403,7 @@ export default function KDSProducaoTV() {
 
               <PizzaDiagrama 
                 diagrama={filaProducao.emProducao}
-                tamanho={450}
+                tamanho={350}
                 mostrarCustos={false}
                 modoTV={true}
               />
@@ -280,28 +411,135 @@ export default function KDSProducaoTV() {
           </div>
 
           <div className="col-span-4">
+            <Card className="bg-gray-900 border-gray-800 p-4 h-full">
+              <div className="flex items-center gap-2 mb-4">
+                <Brain className="w-6 h-6 text-purple-500" />
+                <h3 className="text-xl font-bold text-white">INSTRUÇÕES IA</h3>
+                {carregandoInstrucoes && <Loader2 className="w-4 h-4 animate-spin text-purple-400" />}
+              </div>
+
+              {instrucoes ? (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center text-sm text-gray-400">
+                    <span>Passo {passoAtual + 1} de {instrucoes.passos.length}</span>
+                    <span>~{Math.round(instrucoes.tempoEstimado / 60)} min total</span>
+                  </div>
+
+                  <div className="bg-gray-800 rounded-lg p-4 min-h-[200px]">
+                    <div className="flex items-start gap-3">
+                      <div className="bg-purple-600 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shrink-0">
+                        {instrucoes.passos[passoAtual].numero}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-white text-lg font-medium leading-relaxed">
+                          {instrucoes.passos[passoAtual].instrucao}
+                        </p>
+                        
+                        {instrucoes.passos[passoAtual].dica && (
+                          <div className="mt-3 flex items-start gap-2 text-yellow-400 text-sm">
+                            <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span>{instrucoes.passos[passoAtual].dica}</span>
+                          </div>
+                        )}
+
+                        {instrucoes.passos[passoAtual].ingredientes && instrucoes.passos[passoAtual].ingredientes!.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-1">
+                            {instrucoes.passos[passoAtual].ingredientes!.map((ing, i) => (
+                              <Badge key={i} variant="outline" className="text-xs">
+                                {ing}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+
+                        {instrucoes.passos[passoAtual].tempo && (
+                          <div className="mt-2 text-gray-500 text-sm">
+                            <Clock className="w-3 h-3 inline mr-1" />
+                            ~{instrucoes.passos[passoAtual].tempo}s
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between gap-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={voltarPasso}
+                      disabled={passoAtual === 0}
+                      className="flex-1"
+                      data-testid="button-passo-anterior"
+                    >
+                      Anterior
+                    </Button>
+                    <Button 
+                      onClick={avancarPasso}
+                      disabled={passoAtual === instrucoes.passos.length - 1}
+                      className="flex-1 bg-purple-600 hover:bg-purple-700"
+                      data-testid="button-proximo-passo"
+                    >
+                      Próximo
+                    </Button>
+                  </div>
+
+                  <div className="flex gap-1">
+                    {instrucoes.passos.map((_, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`h-1 flex-1 rounded-full transition-colors ${idx <= passoAtual ? 'bg-purple-500' : 'bg-gray-700'}`}
+                      />
+                    ))}
+                  </div>
+
+                  {instrucoes.dicasGerais.length > 0 && (
+                    <div className="mt-4 p-3 bg-yellow-900/30 rounded-lg border border-yellow-800">
+                      <p className="text-yellow-400 text-sm font-medium mb-1">Dicas Gerais:</p>
+                      <ul className="text-xs text-yellow-300 space-y-1">
+                        {instrucoes.dicasGerais.slice(0, 2).map((dica, i) => (
+                          <li key={i}>• {dica}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                  {carregandoInstrucoes ? (
+                    <>
+                      <Loader2 className="w-12 h-12 animate-spin mb-4 text-purple-400" />
+                      <p>Gerando instruções com IA...</p>
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="w-12 h-12 mb-4 opacity-50" />
+                      <p>Instruções não disponíveis</p>
+                    </>
+                  )}
+                </div>
+              )}
+            </Card>
+          </div>
+
+          <div className="col-span-3">
             <Card className="bg-gray-900 border-gray-800 p-4">
-              <h3 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
+              <h3 className="text-lg font-bold mb-3 text-white flex items-center gap-2">
                 <Clock className="w-5 h-5" />
-                FILA DE PRODUÇÃO ({filaProducao.fila.length})
+                FILA ({filaProducao.fila.length})
               </h3>
               
-              <div className="space-y-3 max-h-[600px] overflow-y-auto">
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
                 {filaProducao.fila.map((item, index) => (
                   <Card 
                     key={item.itemPedidoId}
-                    className="bg-gray-800 border-gray-700 p-3"
+                    className="bg-gray-800 border-gray-700 p-2"
                     data-testid={`fila-item-${index}`}
                   >
                     <div className="flex justify-between items-center">
                       <div>
-                        <Badge variant="outline" className="mb-1">
+                        <Badge variant="outline" className="mb-1 text-xs">
                           #{index + 1}
                         </Badge>
-                        <p className="text-white font-medium">{item.nome}</p>
-                        <p className="text-gray-500 text-sm">
-                          {item.sabores.length} sabor(es)
-                        </p>
+                        <p className="text-white text-sm font-medium">{item.nome}</p>
                       </div>
                       <Button 
                         size="sm"
@@ -317,7 +555,7 @@ export default function KDSProducaoTV() {
                 ))}
 
                 {filaProducao.fila.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-4 text-gray-500 text-sm">
                     <p>Nenhuma pizza na fila</p>
                   </div>
                 )}
@@ -325,20 +563,20 @@ export default function KDSProducaoTV() {
             </Card>
 
             <Card className="bg-gray-900 border-gray-800 p-4 mt-4">
-              <h3 className="text-lg font-bold mb-2 text-white">SEQUÊNCIA DE MONTAGEM</h3>
+              <h3 className="text-lg font-bold mb-2 text-white">SABORES</h3>
               <div className="space-y-2">
                 {filaProducao.emProducao.sabores.map((sabor, index) => (
                   <div 
                     key={`seq-${index}`}
-                    className="flex items-center gap-3 text-gray-300"
+                    className="flex items-center gap-2 text-gray-300 text-sm"
                   >
                     <div 
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold"
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-xs"
                       style={{ backgroundColor: sabor.cor }}
                     >
                       {index + 1}
                     </div>
-                    <span>{sabor.produtoNome}</span>
+                    <span className="truncate">{sabor.produtoNome}</span>
                   </div>
                 ))}
               </div>
@@ -375,13 +613,31 @@ export default function KDSProducaoTV() {
               </div>
             </Card>
           ) : (
-            <Card className="bg-gray-900 border-gray-800 p-8 text-center">
-              <ChefHat className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-400">
+            <Card className="bg-gray-900 border-gray-800 p-12 text-center max-w-md">
+              <div className="relative">
+                <ChefHat className="w-20 h-20 text-gray-600 mx-auto mb-6" />
+                <div className="absolute -top-2 -right-2">
+                  {wsConectado ? (
+                    <Badge className="bg-green-600">
+                      <Wifi className="w-3 h-3 mr-1" /> Live
+                    </Badge>
+                  ) : (
+                    <Badge variant="destructive">
+                      <WifiOff className="w-3 h-3 mr-1" /> Offline
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <h2 className="text-3xl font-bold text-gray-300 mb-2">
                 Nenhuma pizza na fila
               </h2>
-              <p className="text-gray-500 mt-2">
+              <p className="text-gray-500 text-lg">
                 Aguardando novos pedidos...
+              </p>
+              <p className="text-gray-600 text-sm mt-4">
+                {wsConectado 
+                  ? "Você receberá atualizações em tempo real" 
+                  : "Tentando reconectar..."}
               </p>
             </Card>
           )}
