@@ -1008,6 +1008,20 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/pedidos/cozinha", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const pedidos = await storage.getPedidosByStatus(tenantId, [
+        "recebido",
+        "em_preparo",
+        "pronto"
+      ]);
+      res.json(pedidos);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch pedidos cozinha" });
+    }
+  });
+
   app.get("/api/pedidos/:id", requireAuth, requireTenant, async (req, res) => {
     try {
       const tenantId = req.user!.tenantId!;
@@ -1061,20 +1075,6 @@ export async function registerRoutes(
       res.json(pedido);
     } catch (error) {
       res.status(500).json({ error: "Failed to update pedido" });
-    }
-  });
-
-  app.get("/api/pedidos/cozinha", requireAuth, requireTenant, async (req, res) => {
-    try {
-      const tenantId = req.user!.tenantId!;
-      const pedidos = await storage.getPedidosByStatus(tenantId, [
-        "recebido",
-        "em_preparo",
-        "pronto"
-      ]);
-      res.json(pedidos);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch pedidos cozinha" });
     }
   });
 
