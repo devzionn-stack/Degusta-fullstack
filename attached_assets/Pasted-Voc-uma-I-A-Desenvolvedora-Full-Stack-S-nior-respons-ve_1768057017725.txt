@@ -1,0 +1,301 @@
+Você é uma I.A Desenvolvedora Full Stack Sênior, responsável por planejar e criar a arquitetura e o plano de implementação de uma feature avançada do KDS (Kitchen Display System) para um sistema de pizzaria white label, multi-unidade.
+
+Essa feature adiciona um DIAGRAMA INTERATIVO DE PIZZA, gerado automaticamente toda vez que uma pizza entra em produção, com:
+
+Sabores inteiros ou múltiplos sabores
+
+Ingredientes por setor da pizza
+
+Quantidades previstas em gramas
+
+Custos por ingrediente
+
+Integração total com estoque, custos, clientes e histórico
+
+UI/UX robusto para exibição em TV ou compartilhamento
+
+🧠 CONTEXTO REAL DO SISTEMA
+
+Já existe um KDS administrativo (painel de produção).
+
+O KDS NÃO envia automaticamente para produção.
+
+Existe um humano administrador do KDS, que:
+
+Coloca pizzas em modo espera
+
+Libera pizzas para produção uma por vez
+
+Apenas UMA pizza ativa por vez gera o diagrama na TV.
+
+A próxima pizza entra automaticamente após a anterior ser finalizada.
+
+🍕 FLUXO OPERACIONAL OBRIGATÓRIO
+
+Pizza chega no sistema via:
+
+WhatsApp (agente IA)
+
+API externa (CrewAI, LangChain, n8n)
+
+Pizza entra no banco de dados
+
+Pizza aparece:
+
+No KDS (modo aguardando)
+
+Na aba de clientes (histórico)
+
+Administrador do KDS clica no botão “Iniciar Produção”
+
+O sistema:
+
+Gera automaticamente um DIAGRAMA INTERATIVO DA PIZZA
+
+Abre essa visualização em uma aba própria (TV / Display)
+
+Após finalizar a pizza:
+
+Atualiza estoque
+
+Registra custos
+
+Atualiza histórico do cliente
+
+Libera automaticamente a próxima pizza em espera
+
+🍕 DIAGRAMA INTERATIVO DE PIZZA (OBRIGATÓRIO)
+VISUAL
+
+Pizza renderizada em formato circular
+
+Dividida em fatias conforme sabores (ex: 1/2, 1/3, 1/4)
+
+Cada fatia representa um sabor
+
+UI inspirada no modelo visual fornecido (pizza segmentada numerada)
+
+INTERAÇÃO
+
+Hover ou clique mostra:
+
+Ingredientes daquele setor
+
+Quantidade em gramas
+
+Custo estimado
+
+Atualização dinâmica se pizza for personalizada
+
+LAYOUT
+
+Lado esquerdo: pizza renderizada
+
+Lado direito: lista total de ingredientes da pizza inteira
+
+Ingrediente
+
+Quantidade total (g)
+
+Custo total (R$)
+
+🍕 PIZZAS PERSONALIZADAS (LÓGICA OBRIGATÓRIA)
+
+Pizzas padrão possuem ID fixo
+
+Pizzas personalizadas:
+
+Geram um ID único baseado na combinação de sabores
+
+Se a MESMA combinação for pedida novamente (mesmo cliente ou outro):
+
+Usa o MESMO ID
+
+Isso permite saber:
+
+Quais pizzas personalizadas são mais vendidas
+
+Tendência de sabores
+
+🧾 INTEGRAÇÃO COM ESTOQUE E CUSTOS
+
+Após finalizar a pizza:
+
+📦 ESTOQUE
+
+Subtrair automaticamente os ingredientes usados
+
+Registrar um extrato de consumo, contendo:
+
+Pizza ID
+
+Ingrediente
+
+Quantidade usada
+
+Data/hora
+
+Unidade
+
+💰 CUSTOS
+
+Calcular custo real da pizza
+
+Registrar custo:
+
+Por pizza
+
+Por pedido
+
+Por cliente
+
+👤 ABA DE CLIENTES (OBRIGATÓRIO)
+
+Cada cliente deve ter:
+
+ID baseado em:
+
+Nome
+
+Número de telefone (chave primária)
+
+Histórico de pedidos
+
+Total gasto
+
+Total de custo gerado
+
+Quantidade de pizzas compradas
+
+Ticket médio
+
+Frequência de compra
+
+Esses dados serão usados futuramente para CRM e IA.
+
+🧩 MULTI-UNIDADE / WHITE LABEL
+
+Cada conta possui:
+
+ID único
+
+Múltiplas unidades
+
+Cada unidade possui:
+
+Seu próprio KDS
+
+Seu próprio estoque
+
+Seu próprio histórico
+
+Cada KDS de produção possui um ID próprio, visível no sistema
+
+🔌 API DE ENTRADA (OBRIGATÓRIA)
+
+Criar API REST que receba pedidos externos contendo:
+
+{
+  "cliente_nome": "",
+  "cliente_telefone": "",
+  "sabores": [
+    {
+      "pizza_id": "",
+      "fração": 0.5
+    }
+  ]
+}
+
+
+Essa API deve:
+
+Validar dados
+
+Criar pizza personalizada se necessário
+
+Inserir no banco
+
+Enviar para KDS
+
+🧱 O QUE VOCÊ DEVE ENTREGAR NA RESPOSTA
+1️⃣ Arquitetura Geral
+
+Backend
+
+Frontend
+
+Banco de dados
+
+Comunicação em tempo real
+
+2️⃣ Modelagem de Dados
+
+Tabelas
+
+Chaves
+
+Relações
+
+3️⃣ Fluxo Completo do KDS
+
+Da entrada do pedido à finalização
+
+4️⃣ Estratégia do Diagrama de Pizza
+
+Como renderizar
+
+Como dividir
+
+Como tornar interativo
+
+5️⃣ Estratégia de IDs
+
+Pizza padrão
+
+Pizza personalizada
+
+Cliente
+
+Unidade
+
+KDS
+
+6️⃣ Plano de Implementação
+
+Fase 1 (base)
+
+Fase 2 (diagrama)
+
+Fase 3 (IA e otimizações)
+
+7️⃣ Considerações de Performance e Escala
+
+Múltiplas TVs
+
+Muitas unidades
+
+Pico de pedidos
+
+⚠️ REGRAS FINAIS
+
+Tudo deve ser automatizado
+
+Nada manual desnecessário
+
+Pensar como sistema de produção real
+
+Solução simples, escalável e white label
+
+Tudo deve ser possível de rodar no Replit
+
+Se quiser, no próximo passo eu posso:
+
+Quebrar isso em 3 prompts menores (DB / KDS / UI do diagrama)
+
+Criar o prompt só para o algoritmo de geração do ID da pizza personalizada
+
+Criar o prompt específico para UI/UX do diagrama interativo
+
+Simular a resposta da I.A coder com arquitetura pronta
+
+Is this conversation helpful so far?
