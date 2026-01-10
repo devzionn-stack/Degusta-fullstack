@@ -3699,5 +3699,177 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // DIAGRAMA PIZZA ROUTES (TV Display)
+  // ============================================
+
+  app.get("/api/diagrama/fila", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { buscarFilaProducao } = await import("./diagrama_pizza_service");
+      const fila = await buscarFilaProducao(tenantId);
+      res.json(fila);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/diagrama/item/:itemId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { buscarDiagramaItemPedido } = await import("./diagrama_pizza_service");
+      const diagrama = await buscarDiagramaItemPedido(tenantId, req.params.itemId);
+      if (!diagrama) {
+        return res.status(404).json({ error: "Item não encontrado" });
+      }
+      res.json(diagrama);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/diagrama/iniciar/:itemId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { iniciarProducaoItem } = await import("./diagrama_pizza_service");
+      const diagrama = await iniciarProducaoItem(tenantId, req.params.itemId);
+      if (!diagrama) {
+        return res.status(404).json({ error: "Item não encontrado" });
+      }
+      res.json(diagrama);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/diagrama/finalizar/:itemId", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { finalizarProducaoItem } = await import("./diagrama_pizza_service");
+      await finalizarProducaoItem(tenantId, req.params.itemId);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/diagrama/gerar", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { sabores } = req.body;
+      const { gerarDiagramaPizza } = await import("./diagrama_pizza_service");
+      const diagrama = await gerarDiagramaPizza(tenantId, sabores);
+      res.json(diagrama);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================
+  // API EXTERNA (WhatsApp, N8N, CrewAI)
+  // ============================================
+
+  app.post("/api/externo/pedido", async (req, res) => {
+    try {
+      const apiKey = req.headers["x-api-key"] as string;
+      if (!apiKey) {
+        return res.status(401).json({ error: "API Key não fornecida" });
+      }
+
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.apiKeyN8n, apiKey))
+        .limit(1);
+
+      if (!tenant) {
+        return res.status(401).json({ error: "API Key inválida" });
+      }
+
+      const { pedidoExternoSchema } = await import("@shared/schema");
+      const validation = pedidoExternoSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          error: "Dados inválidos",
+          details: validation.error.errors,
+        });
+      }
+
+      const { cliente_nome, cliente_telefone, cliente_endereco, sabores, observacoes } = validation.data;
+
+      let cliente = await storage.getClienteByTelefone(cliente_telefone, tenant.id);
+      if (!cliente) {
+        cliente = await storage.createCliente({
+          tenantId: tenant.id,
+          nome: cliente_nome,
+          telefone: cliente_telefone,
+          endereco: cliente_endereco,
+        });
+      }
+
+      const { criarOuBuscarPizzaPersonalizada, gerarDiagramaPizza } = await import("./diagrama_pizza_service");
+      
+      const saboresInput = sabores.map(s => ({
+        pizza_id: s.pizza_id,
+        fracao: s.fracao,
+      }));
+
+      const pizzaId = await criarOuBuscarPizzaPersonalizada(tenant.id, saboresInput);
+      const diagrama = await gerarDiagramaPizza(tenant.id, saboresInput);
+
+      let precoTotal = 0;
+      for (const sabor of saboresInput) {
+        const [produto] = await db
+          .select()
+          .from(produtos)
+          .where(eq(produtos.id, sabor.pizza_id))
+          .limit(1);
+        if (produto) {
+          precoTotal += parseFloat(produto.preco) * sabor.fracao;
+        }
+      }
+
+      const novoPedido = await storage.createPedido({
+        tenantId: tenant.id,
+        clienteId: cliente.id,
+        status: "pendente",
+        total: precoTotal.toString(),
+        itens: [{
+          nome: diagrama.nome,
+          quantidade: 1,
+          precoUnitario: precoTotal,
+          sabores: saboresInput,
+        }],
+        observacoes: observacoes || "",
+        enderecoEntrega: cliente_endereco || cliente.endereco,
+        origem: "api_externa",
+      });
+
+      const { criarItemPedidoComDiagrama } = await import("./diagrama_pizza_service");
+      const itemDiagrama = await criarItemPedidoComDiagrama(
+        tenant.id,
+        novoPedido.id,
+        saboresInput,
+        precoTotal
+      );
+
+      await emitirPedidoCriado(tenant.id, novoPedido);
+      broadcastNewOrder(tenant.id, novoPedido);
+
+      res.json({
+        success: true,
+        pedidoId: novoPedido.id,
+        clienteId: cliente.id,
+        pizzaPersonalizadaId: pizzaId,
+        itemPedidoId: itemDiagrama.itemPedidoId,
+        custoEstimado: diagrama.custoTotal,
+        precoTotal,
+      });
+    } catch (error: any) {
+      console.error("Erro ao processar pedido externo:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

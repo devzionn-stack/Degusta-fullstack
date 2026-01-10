@@ -652,3 +652,109 @@ export const insertComboItemSchema = createInsertSchema(comboItens).omit({
 });
 export type InsertComboItem = z.infer<typeof insertComboItemSchema>;
 export type ComboItem = typeof comboItens.$inferSelect;
+
+// Pizzas Personalizadas (multi-sabores)
+export const pizzasPersonalizadas = pgTable("pizzas_personalizadas", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  hashSabores: text("hash_sabores").notNull(), // Hash único da combinação de sabores
+  nome: text("nome"), // Nome gerado automaticamente
+  sabores: jsonb("sabores").$type<Array<{
+    produtoId: string;
+    produtoNome: string;
+    fracao: number; // 0.5, 0.33, 0.25, 1
+    ingredientes: Array<{
+      ingredienteId: string;
+      nome: string;
+      quantidade: number;
+      unidade: string;
+      custoUnitario: number;
+    }>;
+  }>>().notNull(),
+  custoTotal: decimal("custo_total", { precision: 10, scale: 2 }),
+  precoSugerido: decimal("preco_sugerido", { precision: 10, scale: 2 }),
+  totalPedidos: integer("total_pedidos").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Itens de pedido detalhados (para diagrama)
+export const itensPedidoDetalhados = pgTable("itens_pedido_detalhados", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  pedidoId: varchar("pedido_id").notNull().references(() => pedidos.id, { onDelete: "cascade" }),
+  pizzaPersonalizadaId: varchar("pizza_personalizada_id").references(() => pizzasPersonalizadas.id, { onDelete: "set null" }),
+  produtoId: varchar("produto_id").references(() => produtos.id, { onDelete: "set null" }),
+  tipoItem: text("tipo_item").notNull().default("pizza"), // pizza, combo, bebida
+  nome: text("nome").notNull(),
+  quantidade: integer("quantidade").default(1),
+  preco: decimal("preco", { precision: 10, scale: 2 }).notNull(),
+  sabores: jsonb("sabores").$type<Array<{
+    produtoId: string;
+    produtoNome: string;
+    fracao: number;
+    setorInicio: number; // Posição no círculo (graus)
+    setorFim: number;
+    cor: string;
+    ingredientes: Array<{
+      ingredienteId: string;
+      nome: string;
+      quantidade: number;
+      unidade: string;
+      custo: number;
+    }>;
+  }>>(),
+  custoReal: decimal("custo_real", { precision: 10, scale: 2 }),
+  statusProducao: text("status_producao").default("aguardando"), // aguardando, producao, concluido
+  diagramaGerado: boolean("diagrama_gerado").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Extrato de consumo de ingredientes
+export const extratoConsumo = pgTable("extrato_consumo", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  pedidoId: varchar("pedido_id").references(() => pedidos.id, { onDelete: "set null" }),
+  itemPedidoId: varchar("item_pedido_id").references(() => itensPedidoDetalhados.id, { onDelete: "set null" }),
+  ingredienteId: varchar("ingrediente_id").references(() => ingredientes.id, { onDelete: "set null" }),
+  ingredienteNome: text("ingrediente_nome").notNull(),
+  quantidadeUsada: decimal("quantidade_usada", { precision: 10, scale: 3 }).notNull(),
+  unidade: text("unidade").default("g"),
+  custoUnitario: decimal("custo_unitario", { precision: 10, scale: 4 }),
+  custoTotal: decimal("custo_total", { precision: 10, scale: 2 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPizzaPersonalizadaSchema = createInsertSchema(pizzasPersonalizadas).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type PizzaPersonalizada = typeof pizzasPersonalizadas.$inferSelect;
+export type InsertPizzaPersonalizada = z.infer<typeof insertPizzaPersonalizadaSchema>;
+
+export const insertItemPedidoDetalhadoSchema = createInsertSchema(itensPedidoDetalhados).omit({
+  id: true,
+  createdAt: true,
+});
+export type ItemPedidoDetalhado = typeof itensPedidoDetalhados.$inferSelect;
+export type InsertItemPedidoDetalhado = z.infer<typeof insertItemPedidoDetalhadoSchema>;
+
+export const insertExtratoConsumoSchema = createInsertSchema(extratoConsumo).omit({
+  id: true,
+  createdAt: true,
+});
+export type ExtratoConsumo = typeof extratoConsumo.$inferSelect;
+export type InsertExtratoConsumo = z.infer<typeof insertExtratoConsumoSchema>;
+
+// API externa para receber pedidos (WhatsApp, n8n, CrewAI)
+export const pedidoExternoSchema = z.object({
+  cliente_nome: z.string().min(1, "Nome do cliente é obrigatório"),
+  cliente_telefone: z.string().min(8, "Telefone é obrigatório"),
+  cliente_endereco: z.string().optional(),
+  sabores: z.array(z.object({
+    pizza_id: z.string(),
+    fracao: z.number().min(0.25).max(1),
+  })).min(1, "Pelo menos um sabor é obrigatório"),
+  observacoes: z.string().optional(),
+});
