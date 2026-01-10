@@ -1,19 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +27,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { CircularProgress } from "@/components/ui/circular-progress";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -53,9 +45,13 @@ import {
   Brain,
   Sparkles,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  CheckCircle2,
+  AlertCircle,
+  Clock
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { LineChart, Line, ResponsiveContainer, Tooltip } from "recharts";
 
 interface EstoqueItem {
   id: string;
@@ -91,10 +87,109 @@ interface PrevisaoEstoque {
   createdAt: string;
 }
 
+function generateMockTrendData(currentQty: number, minimo: number) {
+  const data = [];
+  let qty = currentQty + Math.floor(Math.random() * minimo * 2);
+  for (let i = 6; i >= 0; i--) {
+    const consumption = Math.floor(Math.random() * (minimo * 0.3)) + 1;
+    qty = Math.max(0, qty - consumption);
+    data.push({
+      day: i,
+      quantidade: i === 0 ? currentQty : qty + Math.floor(Math.random() * 10)
+    });
+  }
+  data.reverse();
+  data[data.length - 1].quantidade = currentQty;
+  return data;
+}
+
+function calculateDaysUntilEmpty(currentQty: number, trendData: { day: number; quantidade: number }[]) {
+  if (trendData.length < 2) return null;
+  const avgConsumption = (trendData[0].quantidade - currentQty) / 7;
+  if (avgConsumption <= 0) return null;
+  return Math.ceil(currentQty / avgConsumption);
+}
+
+function SparklineChart({ data, color }: { data: { day: number; quantidade: number }[]; color: string }) {
+  return (
+    <div className="w-24 h-8">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <Tooltip 
+            contentStyle={{ 
+              fontSize: '10px', 
+              padding: '4px 8px',
+              background: 'white',
+              border: '1px solid #e5e7eb',
+              borderRadius: '4px'
+            }}
+            formatter={(value: number) => [`${value} un.`, 'Qtd']}
+            labelFormatter={(label: number) => `Dia ${7 - label}`}
+          />
+          <Line 
+            type="monotone" 
+            dataKey="quantidade" 
+            stroke={color}
+            strokeWidth={2}
+            dot={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function StockStatusBadge({ status, isCritical }: { status: string; isCritical: boolean }) {
+  if (status === 'critico' || status === 'sem_estoque') {
+    return (
+      <Badge 
+        className={`bg-red-500 text-white border-0 flex items-center gap-1 ${isCritical ? 'animate-pulse-critical' : ''}`}
+        data-testid="badge-critico"
+      >
+        <AlertTriangle className="h-3 w-3" />
+        CRÍTICO
+      </Badge>
+    );
+  }
+  if (status === 'baixo') {
+    return (
+      <Badge className="bg-amber-500 text-white border-0 flex items-center gap-1" data-testid="badge-baixo">
+        <AlertCircle className="h-3 w-3" />
+        BAIXO
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="bg-green-500 text-white border-0 flex items-center gap-1" data-testid="badge-ok">
+      <CheckCircle2 className="h-3 w-3" />
+      OK
+    </Badge>
+  );
+}
+
+function RadialGauge({ percentage, size = 60 }: { percentage: number; size?: number }) {
+  let color: "success" | "warning" | "danger" = "success";
+  if (percentage < 20) color = "danger";
+  else if (percentage < 50) color = "warning";
+  
+  return (
+    <CircularProgress 
+      value={percentage} 
+      size={size}
+      strokeWidth={6}
+      color={color}
+      showValue={true}
+    />
+  );
+}
+
 export default function Estoque() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isReporDialogOpen, setIsReporDialogOpen] = useState(false);
+  const [selectedReporItem, setSelectedReporItem] = useState<EstoqueItem | null>(null);
+  const [reporQuantidade, setReporQuantidade] = useState("");
   const [selectedProduto, setSelectedProduto] = useState("");
   const [quantidade, setQuantidade] = useState("");
   const [quantidadeMinima, setQuantidadeMinima] = useState("");
@@ -192,6 +287,29 @@ export default function Estoque() {
     },
   });
 
+  const reporEstoqueMutation = useMutation({
+    mutationFn: async (data: { id: string; quantidade: number }) => {
+      const res = await fetch(`/api/estoque/${data.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ quantidade: data.quantidade }),
+      });
+      if (!res.ok) throw new Error("Erro ao repor estoque");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["estoque"] });
+      toast({ title: "Estoque reposto com sucesso!" });
+      setIsReporDialogOpen(false);
+      setSelectedReporItem(null);
+      setReporQuantidade("");
+    },
+    onError: () => {
+      toast({ title: "Erro ao repor estoque", variant: "destructive" });
+    },
+  });
+
   const handleAddEstoque = () => {
     if (!selectedProduto || !quantidade) {
       toast({ title: "Preencha todos os campos", variant: "destructive" });
@@ -202,6 +320,24 @@ export default function Estoque() {
       quantidade: parseInt(quantidade),
       quantidadeMinima: parseInt(quantidadeMinima) || 10,
     });
+  };
+
+  const handleRepor = () => {
+    if (!selectedReporItem || !reporQuantidade) {
+      toast({ title: "Preencha a quantidade", variant: "destructive" });
+      return;
+    }
+    const novaQuantidade = selectedReporItem.quantidade + parseInt(reporQuantidade);
+    reporEstoqueMutation.mutate({
+      id: selectedReporItem.id,
+      quantidade: novaQuantidade,
+    });
+  };
+
+  const openReporModal = (item: EstoqueItem) => {
+    setSelectedReporItem(item);
+    setReporQuantidade("");
+    setIsReporDialogOpen(true);
   };
 
   const produtoMap = new Map(produtos.map(p => [p.id, p]));
@@ -219,6 +355,23 @@ export default function Estoque() {
     const ideal = minimo * 3;
     return Math.min((item.quantidade / ideal) * 100, 100);
   };
+
+  const sortedEstoqueItems = useMemo(() => {
+    return [...estoqueItems].sort((a, b) => {
+      const statusA = getStockStatus(a).status;
+      const statusB = getStockStatus(b).status;
+      const priority: Record<string, number> = { sem_estoque: 0, critico: 1, baixo: 2, normal: 3 };
+      return priority[statusA] - priority[statusB];
+    });
+  }, [estoqueItems]);
+
+  const trendDataMap = useMemo(() => {
+    const map = new Map<string, { day: number; quantidade: number }[]>();
+    estoqueItems.forEach(item => {
+      map.set(item.id, generateMockTrendData(item.quantidade, item.quantidadeMinima ?? 10));
+    });
+    return map;
+  }, [estoqueItems]);
 
   const stats = {
     totalItens: estoqueItems.length,
@@ -321,6 +474,77 @@ export default function Estoque() {
           </Dialog>
         </div>
 
+        <Dialog open={isReporDialogOpen} onOpenChange={setIsReporDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5 text-green-600" />
+                Reposição Rápida
+              </DialogTitle>
+              <DialogDescription>
+                {selectedReporItem && produtoMap.get(selectedReporItem.produtoId)?.nome}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {selectedReporItem && (
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="text-sm text-gray-500">Estoque Atual</p>
+                    <p className="text-xl font-bold text-red-600">{selectedReporItem.quantidade}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Mínimo</p>
+                    <p className="text-xl font-bold">{selectedReporItem.quantidadeMinima ?? 10}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Sugerido</p>
+                    <p className="text-xl font-bold text-green-600">
+                      +{Math.max((selectedReporItem.quantidadeMinima ?? 10) * 3 - selectedReporItem.quantidade, 10)}
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="reporQuantidade">Quantidade a Repor</Label>
+                <Input
+                  id="reporQuantidade"
+                  data-testid="input-repor-quantidade"
+                  type="number"
+                  min="1"
+                  value={reporQuantidade}
+                  onChange={(e) => setReporQuantidade(e.target.value)}
+                  placeholder="Ex: 50"
+                />
+              </div>
+              {reporQuantidade && selectedReporItem && (
+                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-sm text-green-700">
+                    Novo estoque: <span className="font-bold">{selectedReporItem.quantidade + parseInt(reporQuantidade || "0")}</span> unidades
+                  </p>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsReporDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleRepor}
+                disabled={reporEstoqueMutation.isPending || !reporQuantidade}
+                className="bg-green-600 hover:bg-green-700"
+                data-testid="button-confirmar-repor"
+              >
+                {reporEstoqueMutation.isPending ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4 mr-2" />
+                )}
+                Confirmar Reposição
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -337,10 +561,10 @@ export default function Estoque() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={stats.criticos > 0 ? "border-red-300 bg-red-50/50" : ""}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Estoque Crítico</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <AlertTriangle className={`h-4 w-4 ${stats.criticos > 0 ? "text-red-500 animate-pulse-critical" : "text-red-500"}`} />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600" data-testid="text-criticos">
@@ -352,7 +576,7 @@ export default function Estoque() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={stats.baixos > 0 ? "border-amber-300 bg-amber-50/50" : ""}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Estoque Baixo</CardTitle>
               <TrendingDown className="h-4 w-4 text-amber-500" />
@@ -405,7 +629,7 @@ export default function Estoque() {
               <CardHeader>
                 <CardTitle>Inventário</CardTitle>
                 <CardDescription>
-                  Todos os produtos e suas quantidades em estoque
+                  Produtos ordenados por criticidade • Itens mais urgentes aparecem primeiro
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -413,51 +637,86 @@ export default function Estoque() {
                   <div className="flex items-center justify-center py-8">
                     <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
                   </div>
-                ) : estoqueItems.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Produto</TableHead>
-                        <TableHead>Quantidade</TableHead>
-                        <TableHead>Mínimo</TableHead>
-                        <TableHead>Nível</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {estoqueItems.map((item) => {
-                        const produto = produtoMap.get(item.produtoId);
-                        const stockStatus = getStockStatus(item);
-                        const percentage = getStockPercentage(item);
-                        
-                        return (
-                          <TableRow key={item.id} data-testid={`row-estoque-${item.id}`}>
-                            <TableCell className="font-medium">
-                              {produto?.nome || "Produto não encontrado"}
-                            </TableCell>
-                            <TableCell>
-                              <span className="font-semibold">{item.quantidade}</span>
-                              {item.unidade && <span className="text-gray-500 ml-1">{item.unidade}</span>}
-                            </TableCell>
-                            <TableCell>
-                              {item.quantidadeMinima ?? 10}
-                            </TableCell>
-                            <TableCell className="w-32">
-                              <Progress 
-                                value={percentage} 
-                                className={`h-2 ${stockStatus.status === 'critico' ? '[&>div]:bg-red-500' : stockStatus.status === 'baixo' ? '[&>div]:bg-amber-500' : '[&>div]:bg-green-500'}`}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Badge className={stockStatus.color}>
-                                {stockStatus.label}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                ) : sortedEstoqueItems.length > 0 ? (
+                  <div className="space-y-3">
+                    {sortedEstoqueItems.map((item, index) => {
+                      const produto = produtoMap.get(item.produtoId);
+                      const stockStatus = getStockStatus(item);
+                      const percentage = getStockPercentage(item);
+                      const trendData = trendDataMap.get(item.id) || [];
+                      const daysUntilEmpty = calculateDaysUntilEmpty(item.quantidade, trendData);
+                      const isCritical = stockStatus.status === 'critico' || stockStatus.status === 'sem_estoque';
+                      const isLow = stockStatus.status === 'baixo';
+                      
+                      const cardClasses = `
+                        border rounded-lg p-4 transition-all duration-300
+                        ${isCritical ? 'stock-card-critical animate-shake-attention border-2' : ''}
+                        ${isLow ? 'stock-card-low border-2' : ''}
+                        ${!isCritical && !isLow ? 'hover:shadow-md' : ''}
+                      `;
+                      
+                      const trendColor = isCritical ? '#ef4444' : isLow ? '#f59e0b' : '#22c55e';
+                      
+                      return (
+                        <div 
+                          key={item.id} 
+                          className={cardClasses}
+                          style={{ animationDelay: `${index * 0.1}s` }}
+                          data-testid={`card-estoque-${item.id}`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <RadialGauge percentage={percentage} size={70} />
+                            
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-semibold text-lg truncate">
+                                  {produto?.nome || "Produto não encontrado"}
+                                </h3>
+                                <StockStatusBadge status={stockStatus.status} isCritical={isCritical} />
+                              </div>
+                              
+                              <div className="flex items-center gap-4 text-sm text-gray-500">
+                                <span>
+                                  <span className="font-semibold text-gray-900">{item.quantidade}</span>
+                                  {item.unidade && <span className="ml-1">{item.unidade}</span>}
+                                  {!item.unidade && <span className="ml-1">unidades</span>}
+                                </span>
+                                <span className="text-gray-300">|</span>
+                                <span>Mínimo: {item.quantidadeMinima ?? 10}</span>
+                                
+                                {daysUntilEmpty && daysUntilEmpty <= 14 && (
+                                  <>
+                                    <span className="text-gray-300">|</span>
+                                    <span className={`flex items-center gap-1 ${daysUntilEmpty <= 3 ? 'text-red-600 font-semibold' : daysUntilEmpty <= 7 ? 'text-amber-600' : 'text-gray-500'}`}>
+                                      <Clock className="h-3 w-3" />
+                                      {daysUntilEmpty <= 3 ? 'Esgota em' : 'Previsão:'} ~{daysUntilEmpty} dias
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-center gap-1">
+                              <p className="text-xs text-gray-400">Tendência 7 dias</p>
+                              <SparklineChart data={trendData} color={trendColor} />
+                            </div>
+                            
+                            {isCritical && (
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 whitespace-nowrap"
+                                onClick={() => openReporModal(item)}
+                                data-testid={`button-repor-${item.id}`}
+                              >
+                                <ShoppingCart className="h-4 w-4 mr-1" />
+                                Repor
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
                     <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />

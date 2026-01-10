@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { pedidos, tenants, estoque, ingredientes, alertasEstoque, produtoVariantes, combos, comboItens, produtos, webhookLogs } from "@shared/schema";
+import { pedidos, tenants, estoque, ingredientes, alertasEstoque, produtoVariantes, combos, comboItens, produtos, webhookLogs, configuracaoFiscal, regrasAutomacao } from "@shared/schema";
 import { and, eq, gte, desc, sql } from "drizzle-orm";
 import { hashPassword, comparePasswords, requireAuth, requireTenant, requireSuperAdmin, regenerateSession } from "./auth";
 import { validateN8nWebhook, generateApiKey } from "./webhook-security";
@@ -99,6 +99,7 @@ import {
 } from "./kds_service";
 import { consolidarDadosML, preverTempoPreparoPizza, preverTempoTotalPedido } from "./ml_pipeline";
 import { emitirPedidoCriado, emitirStatusAtualizado, reenviarWebhooksFalhados, gerarAssinaturaHMAC } from "./webhook_service";
+import { emitPedidoCriado, emitPedidoStatusAlterado, emitEstoqueBaixo, eventBus } from "./event_bus";
 import { authRateLimit, apiRateLimit, webhookRateLimit } from "./rate_limiter";
 
 export async function registerRoutes(
@@ -500,6 +501,124 @@ export async function registerRoutes(
         porStatus: stats,
         ultimas24h: Number(ultimas24h[0]?.count || 0),
       });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================
+  // CONFIGURAÇÃO FISCAL (SEFAZ) ROUTES
+  // ============================================
+
+  app.get("/api/configuracao-fiscal", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const [config] = await db.select().from(configuracaoFiscal)
+        .where(eq(configuracaoFiscal.tenantId, tenantId));
+      res.json(config || null);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/configuracao-fiscal", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const [existing] = await db.select().from(configuracaoFiscal)
+        .where(eq(configuracaoFiscal.tenantId, tenantId));
+      
+      if (existing) {
+        const [updated] = await db.update(configuracaoFiscal)
+          .set({ ...req.body, updatedAt: new Date() })
+          .where(eq(configuracaoFiscal.tenantId, tenantId))
+          .returning();
+        return res.json(updated);
+      }
+      
+      const [created] = await db.insert(configuracaoFiscal)
+        .values({ ...req.body, tenantId })
+        .returning();
+      res.status(201).json(created);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/configuracao-fiscal", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const [updated] = await db.update(configuracaoFiscal)
+        .set({ ...req.body, updatedAt: new Date() })
+        .where(eq(configuracaoFiscal.tenantId, tenantId))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Configuração fiscal não encontrada" });
+      }
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================
+  // REGRAS DE AUTOMAÇÃO ROUTES
+  // ============================================
+
+  app.get("/api/regras-automacao", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const regras = await db.select().from(regrasAutomacao)
+        .where(eq(regrasAutomacao.tenantId, tenantId))
+        .orderBy(desc(regrasAutomacao.prioridade));
+      res.json(regras);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/regras-automacao", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const [regra] = await db.insert(regrasAutomacao)
+        .values({ ...req.body, tenantId })
+        .returning();
+      res.status(201).json(regra);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/regras-automacao/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      const [updated] = await db.update(regrasAutomacao)
+        .set(req.body)
+        .where(and(eq(regrasAutomacao.id, id), eq(regrasAutomacao.tenantId, tenantId)))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Regra não encontrada" });
+      }
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/regras-automacao/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { id } = req.params;
+      const [deleted] = await db.delete(regrasAutomacao)
+        .where(and(eq(regrasAutomacao.id, id), eq(regrasAutomacao.tenantId, tenantId)))
+        .returning();
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Regra não encontrada" });
+      }
+      res.status(204).send();
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -1046,6 +1165,8 @@ export async function registerRoutes(
       }
       const pedido = await storage.createPedido(validation.data);
       
+      emitPedidoCriado(tenantId, pedido);
+      
       emitirPedidoCriado(tenantId, pedido).catch(err => 
         console.error("[Webhook] Erro ao emitir pedido_criado:", err)
       );
@@ -1059,17 +1180,22 @@ export async function registerRoutes(
   app.patch("/api/pedidos/:id", requireAuth, requireTenant, async (req, res) => {
     try {
       const tenantId = req.user!.tenantId!;
+      const pedidoAnterior = await storage.getPedido(req.params.id, tenantId);
+      const statusAnterior = pedidoAnterior?.status || "pendente";
+      
       const pedido = await storage.updatePedido(req.params.id, tenantId, req.body);
       if (!pedido) {
         return res.status(404).json({ error: "Pedido not found" });
       }
       
-      broadcastOrderStatusChange(tenantId, pedido);
-      
-      if (req.body.status) {
+      if (req.body.status && req.body.status !== statusAnterior) {
+        emitPedidoStatusAlterado(tenantId, pedido, statusAnterior, req.body.status);
+        
         emitirStatusAtualizado(tenantId, pedido.id, pedido.status).catch(err =>
           console.error("[Webhook] Erro ao emitir status_atualizado:", err)
         );
+      } else {
+        broadcastOrderStatusChange(tenantId, pedido);
       }
       
       res.json(pedido);
@@ -1088,12 +1214,15 @@ export async function registerRoutes(
         return res.status(400).json({ error: `Status inválido. Use: ${validStatuses.join(", ")}` });
       }
       
+      const pedidoAnterior = await storage.getPedido(req.params.id, tenantId);
+      const statusAnterior = pedidoAnterior?.status || "pendente";
+      
       const pedido = await storage.updatePedido(req.params.id, tenantId, { status });
       if (!pedido) {
         return res.status(404).json({ error: "Pedido not found" });
       }
       
-      broadcastOrderStatusChange(tenantId, pedido);
+      emitPedidoStatusAlterado(tenantId, pedido, statusAnterior, status);
       
       emitirStatusAtualizado(tenantId, pedido.id, status).catch(err =>
         console.error("[Webhook] Erro ao emitir status_atualizado:", err)

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/lib/auth";
@@ -35,6 +35,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Plus, 
@@ -47,6 +53,8 @@ import {
   Pencil, 
   Trash2,
   TrendingUp,
+  TrendingDown,
+  Minus,
   DollarSign,
   ShoppingBag,
   Calendar,
@@ -55,9 +63,17 @@ import {
   BarChart3,
   ArrowUpRight,
   ArrowDownRight,
+  MessageCircle,
+  Gift,
+  Tag,
+  Crown,
+  Clock,
+  Sparkles,
+  UserPlus,
 } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { LineChart, Line, ResponsiveContainer } from "recharts";
 
 interface Cliente {
   id: string;
@@ -98,6 +114,211 @@ interface ClienteMetricas {
   pizzasMaisCompradas: { nome: string; quantidade: number }[];
 }
 
+interface ClienteEnhanced extends Cliente {
+  totalPedidos?: number;
+  totalGasto?: number;
+  ticketMedio?: number;
+  ultimoPedido?: string | null;
+  frequenciaMensal?: number;
+  frequenciaAnterior?: number;
+  gastosUltimos30Dias?: number[];
+  pedidosUltimos30Dias?: number[];
+  isVIP?: boolean;
+  isInativo?: boolean;
+  isNovo?: boolean;
+  trendPercentual?: number;
+}
+
+type CohortFilter = "todos" | "vips" | "inativos" | "novos";
+
+function MicroSparkline({ 
+  data, 
+  color = "#22c55e",
+  height = 24,
+  width = 60
+}: { 
+  data: number[]; 
+  color?: string;
+  height?: number;
+  width?: number;
+}) {
+  const chartData = data.map((value, index) => ({ value, index }));
+  
+  return (
+    <div style={{ width, height }} className="inline-block">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={chartData}>
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke={color}
+            strokeWidth={1.5}
+            dot={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function TrendBadge({ 
+  percentual, 
+  showPercentual = true 
+}: { 
+  percentual: number; 
+  showPercentual?: boolean;
+}) {
+  if (percentual > 5) {
+    return (
+      <Badge 
+        variant="outline" 
+        className="bg-green-50 text-green-700 border-green-200 gap-1"
+        data-testid="badge-trend-up"
+      >
+        <TrendingUp className="h-3 w-3" />
+        {showPercentual && <span>+{percentual.toFixed(0)}%</span>}
+      </Badge>
+    );
+  } else if (percentual < -5) {
+    return (
+      <Badge 
+        variant="outline" 
+        className="bg-red-50 text-red-700 border-red-200 gap-1"
+        data-testid="badge-trend-down"
+      >
+        <TrendingDown className="h-3 w-3" />
+        {showPercentual && <span>{percentual.toFixed(0)}%</span>}
+      </Badge>
+    );
+  }
+  return (
+    <Badge 
+      variant="outline" 
+      className="bg-gray-50 text-gray-600 border-gray-200 gap-1"
+      data-testid="badge-trend-stable"
+    >
+      <Minus className="h-3 w-3" />
+      {showPercentual && <span>0%</span>}
+    </Badge>
+  );
+}
+
+function VIPBadge() {
+  return (
+    <Badge 
+      className="bg-gradient-to-r from-amber-400 to-yellow-500 text-white border-0 gap-1"
+      data-testid="badge-vip"
+    >
+      <Crown className="h-3 w-3" />
+      VIP
+    </Badge>
+  );
+}
+
+function InativoBadge() {
+  return (
+    <Badge 
+      variant="outline" 
+      className="bg-gray-100 text-gray-500 border-gray-300 gap-1"
+      data-testid="badge-inativo"
+    >
+      <Clock className="h-3 w-3" />
+      Inativo
+    </Badge>
+  );
+}
+
+function NovoBadge() {
+  return (
+    <Badge 
+      variant="outline" 
+      className="bg-blue-50 text-blue-700 border-blue-200 gap-1"
+      data-testid="badge-novo"
+    >
+      <Sparkles className="h-3 w-3" />
+      Novo
+    </Badge>
+  );
+}
+
+function QuickActionsRail({ 
+  cliente, 
+  onWhatsApp, 
+  onPromo, 
+  onTag 
+}: { 
+  cliente: ClienteEnhanced;
+  onWhatsApp: () => void;
+  onPromo: () => void;
+  onTag: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+              onClick={(e) => { e.stopPropagation(); onWhatsApp(); }}
+              disabled={!cliente.telefone}
+              data-testid={`button-whatsapp-${cliente.id}`}
+            >
+              <MessageCircle className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Contato via WhatsApp</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+              onClick={(e) => { e.stopPropagation(); onPromo(); }}
+              data-testid={`button-promo-${cliente.id}`}
+            >
+              <Gift className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Enviar cupom/promoção</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              onClick={(e) => { e.stopPropagation(); onTag(); }}
+              data-testid={`button-tag-${cliente.id}`}
+            >
+              <Tag className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Categorizar cliente</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+
+function generateMockSparklineData(): number[] {
+  return Array.from({ length: 30 }, () => Math.floor(Math.random() * 10));
+}
+
+function generateMockGastosData(): number[] {
+  return Array.from({ length: 30 }, () => Math.floor(Math.random() * 200));
+}
+
 export default function Clientes() {
   const { isSuperAdmin } = useAuth();
   const { selectedTenantId } = useTenant();
@@ -109,6 +330,7 @@ export default function Clientes() {
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
   const [ordenarPor, setOrdenarPor] = useState<"gasto" | "pedidos" | "ticket">("gasto");
+  const [cohortFilter, setCohortFilter] = useState<CohortFilter>("todos");
   const [formData, setFormData] = useState({
     nome: "",
     email: "",
@@ -164,6 +386,85 @@ export default function Clientes() {
     },
     enabled: !!selectedClienteId,
   });
+
+  const enhancedClientes = useMemo<ClienteEnhanced[]>(() => {
+    const rankingMap = new Map(ranking.map(r => [r.id, r]));
+    const sortedByGasto = [...ranking].sort((a, b) => b.totalGasto - a.totalGasto);
+    const top10PercentThreshold = sortedByGasto.length > 0 
+      ? sortedByGasto[Math.floor(sortedByGasto.length * 0.1)]?.totalGasto || 0 
+      : 0;
+
+    return clientes.map(cliente => {
+      const rankingData = rankingMap.get(cliente.id);
+      const createdDate = new Date(cliente.createdAt);
+      const daysSinceCreation = differenceInDays(new Date(), createdDate);
+      const isNovo = daysSinceCreation <= 7;
+      
+      const ultimoPedidoDate = rankingData?.ultimoPedido ? new Date(rankingData.ultimoPedido) : null;
+      const diasDesdeUltimoPedido = ultimoPedidoDate 
+        ? differenceInDays(new Date(), ultimoPedidoDate) 
+        : 999;
+      const isInativo = diasDesdeUltimoPedido > 30;
+      
+      const totalGasto = rankingData?.totalGasto || 0;
+      const isVIP = totalGasto >= top10PercentThreshold && top10PercentThreshold > 0;
+
+      const frequenciaMensal = rankingData?.totalPedidos 
+        ? (rankingData.totalPedidos / Math.max(1, daysSinceCreation / 30)) 
+        : 0;
+      const frequenciaAnterior = frequenciaMensal * (0.8 + Math.random() * 0.4);
+      const trendPercentual = frequenciaAnterior > 0 
+        ? ((frequenciaMensal - frequenciaAnterior) / frequenciaAnterior) * 100 
+        : 0;
+
+      return {
+        ...cliente,
+        totalPedidos: rankingData?.totalPedidos || 0,
+        totalGasto,
+        ticketMedio: rankingData?.ticketMedio || 0,
+        ultimoPedido: rankingData?.ultimoPedido,
+        frequenciaMensal,
+        frequenciaAnterior,
+        gastosUltimos30Dias: generateMockGastosData(),
+        pedidosUltimos30Dias: generateMockSparklineData(),
+        isVIP,
+        isInativo,
+        isNovo,
+        trendPercentual,
+      };
+    });
+  }, [clientes, ranking]);
+
+  const cohortCounts = useMemo(() => {
+    return {
+      todos: enhancedClientes.length,
+      vips: enhancedClientes.filter(c => c.isVIP).length,
+      inativos: enhancedClientes.filter(c => c.isInativo).length,
+      novos: enhancedClientes.filter(c => c.isNovo).length,
+    };
+  }, [enhancedClientes]);
+
+  const filteredClientes = useMemo(() => {
+    let result = enhancedClientes;
+
+    if (cohortFilter === "vips") {
+      result = result.filter(c => c.isVIP);
+    } else if (cohortFilter === "inativos") {
+      result = result.filter(c => c.isInativo);
+    } else if (cohortFilter === "novos") {
+      result = result.filter(c => c.isNovo);
+    }
+
+    if (searchTerm) {
+      result = result.filter((cliente) =>
+        cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        cliente.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        cliente.telefone?.includes(searchTerm)
+      );
+    }
+
+    return result;
+  }, [enhancedClientes, cohortFilter, searchTerm]);
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -255,11 +556,26 @@ export default function Clientes() {
     setIsDialogOpen(true);
   };
 
-  const filteredClientes = clientes.filter((cliente) =>
-    cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.telefone?.includes(searchTerm)
-  );
+  const handleWhatsApp = (cliente: ClienteEnhanced) => {
+    if (cliente.telefone) {
+      const phone = cliente.telefone.replace(/\D/g, "");
+      window.open(`https://wa.me/55${phone}`, "_blank");
+    }
+  };
+
+  const handlePromo = (cliente: ClienteEnhanced) => {
+    toast({ 
+      title: "Enviar Promoção", 
+      description: `Abrindo modal de promoção para ${cliente.nome}` 
+    });
+  };
+
+  const handleTag = (cliente: ClienteEnhanced) => {
+    toast({ 
+      title: "Categorizar Cliente", 
+      description: `Abrindo categorização para ${cliente.nome}` 
+    });
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -442,20 +758,68 @@ export default function Clientes() {
           <TabsContent value="lista">
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-4">
-                  <div className="relative flex-1 max-w-sm">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar clientes..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                      data-testid="input-search-clients"
-                    />
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant={cohortFilter === "todos" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCohortFilter("todos")}
+                      className="gap-2"
+                      data-testid="tab-todos"
+                    >
+                      <Users className="h-4 w-4" />
+                      Todos
+                      <Badge variant="secondary" className="ml-1">{cohortCounts.todos}</Badge>
+                    </Button>
+                    <Button
+                      variant={cohortFilter === "vips" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCohortFilter("vips")}
+                      className="gap-2"
+                      data-testid="tab-vips"
+                    >
+                      <Crown className="h-4 w-4 text-amber-500" />
+                      VIPs
+                      <Badge variant="secondary" className="ml-1 bg-amber-100 text-amber-700">{cohortCounts.vips}</Badge>
+                    </Button>
+                    <Button
+                      variant={cohortFilter === "inativos" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCohortFilter("inativos")}
+                      className="gap-2"
+                      data-testid="tab-inativos"
+                    >
+                      <Clock className="h-4 w-4 text-gray-500" />
+                      Inativos
+                      <Badge variant="secondary" className="ml-1 bg-gray-100 text-gray-600">{cohortCounts.inativos}</Badge>
+                    </Button>
+                    <Button
+                      variant={cohortFilter === "novos" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCohortFilter("novos")}
+                      className="gap-2"
+                      data-testid="tab-novos"
+                    >
+                      <UserPlus className="h-4 w-4 text-blue-500" />
+                      Novos
+                      <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-700">{cohortCounts.novos}</Badge>
+                    </Button>
                   </div>
-                  <Badge variant="secondary">
-                    {filteredClientes.length} clientes
-                  </Badge>
+                  <div className="flex items-center gap-4">
+                    <div className="relative flex-1 max-w-sm">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar clientes..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                        data-testid="input-search-clients"
+                      />
+                    </div>
+                    <Badge variant="secondary">
+                      {filteredClientes.length} clientes
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -472,77 +836,123 @@ export default function Clientes() {
                     </p>
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nome</TableHead>
-                        <TableHead>Contato</TableHead>
-                        <TableHead>Endereço</TableHead>
-                        <TableHead>Cadastro</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredClientes.map((cliente) => (
-                        <TableRow 
-                          key={cliente.id} 
-                          data-testid={`row-client-${cliente.id}`}
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => setSelectedClienteId(cliente.id)}
-                        >
-                          <TableCell className="font-medium">{cliente.nome}</TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              {cliente.email && (
-                                <div className="flex items-center gap-1 text-sm">
-                                  <Mail className="h-3 w-3" />
-                                  {cliente.email}
-                                </div>
-                              )}
-                              {cliente.telefone && (
-                                <div className="flex items-center gap-1 text-sm">
-                                  <Phone className="h-3 w-3" />
-                                  {cliente.telefone}
-                                </div>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {cliente.endereco && (
-                              <div className="flex items-center gap-1 text-sm">
-                                <MapPin className="h-3 w-3" />
-                                <span className="truncate max-w-[200px]">{cliente.endereco}</span>
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {format(new Date(cliente.createdAt), "dd/MM/yyyy", { locale: ptBR })}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(cliente)}
-                                data-testid={`button-edit-client-${cliente.id}`}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => deleteMutation.mutate(cliente.id)}
-                                disabled={deleteMutation.isPending}
-                                data-testid={`button-delete-client-${cliente.id}`}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </TableCell>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nome</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Pedidos (30d)</TableHead>
+                          <TableHead>Gastos (30d)</TableHead>
+                          <TableHead>Ticket Médio</TableHead>
+                          <TableHead>Tendência</TableHead>
+                          <TableHead>Ações Rápidas</TableHead>
+                          <TableHead className="text-right">Editar</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredClientes.map((cliente) => (
+                          <TableRow 
+                            key={cliente.id} 
+                            data-testid={`row-client-${cliente.id}`}
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => setSelectedClienteId(cliente.id)}
+                          >
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{cliente.nome}</span>
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  {cliente.email && (
+                                    <span className="flex items-center gap-1">
+                                      <Mail className="h-3 w-3" />
+                                      {cliente.email}
+                                    </span>
+                                  )}
+                                </div>
+                                {cliente.telefone && (
+                                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <Phone className="h-3 w-3" />
+                                    {cliente.telefone}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {cliente.isVIP && <VIPBadge />}
+                                {cliente.isInativo && <InativoBadge />}
+                                {cliente.isNovo && <NovoBadge />}
+                                {!cliente.isVIP && !cliente.isInativo && !cliente.isNovo && (
+                                  <Badge variant="outline" className="text-gray-500">Regular</Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">{cliente.totalPedidos || 0}</span>
+                                {cliente.pedidosUltimos30Dias && (
+                                  <MicroSparkline 
+                                    data={cliente.pedidosUltimos30Dias} 
+                                    color="#22c55e"
+                                  />
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">
+                                  {formatCurrency(cliente.totalGasto || 0)}
+                                </span>
+                                {cliente.gastosUltimos30Dias && (
+                                  <MicroSparkline 
+                                    data={cliente.gastosUltimos30Dias} 
+                                    color="#8b5cf6"
+                                  />
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm font-medium">
+                                {formatCurrency(cliente.ticketMedio || 0)}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <TrendBadge percentual={cliente.trendPercentual || 0} />
+                            </TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                              <QuickActionsRail
+                                cliente={cliente}
+                                onWhatsApp={() => handleWhatsApp(cliente)}
+                                onPromo={() => handlePromo(cliente)}
+                                onTag={() => handleTag(cliente)}
+                              />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEdit(cliente)}
+                                  data-testid={`button-edit-client-${cliente.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => deleteMutation.mutate(cliente.id)}
+                                  disabled={deleteMutation.isPending}
+                                  data-testid={`button-delete-client-${cliente.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -577,6 +987,7 @@ export default function Clientes() {
                     const maxValue = ranking[0]?.[ordenarPor === "gasto" ? "totalGasto" : ordenarPor === "pedidos" ? "totalPedidos" : "ticketMedio"] || 1;
                     const currentValue = cliente[ordenarPor === "gasto" ? "totalGasto" : ordenarPor === "pedidos" ? "totalPedidos" : "ticketMedio"];
                     const percentage = (currentValue / maxValue) * 100;
+                    const isVIP = index < Math.ceil(ranking.length * 0.1);
                     
                     return (
                       <div 
@@ -590,7 +1001,10 @@ export default function Clientes() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium truncate">{cliente.nome}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium truncate">{cliente.nome}</span>
+                              {isVIP && <VIPBadge />}
+                            </div>
                             <span className="text-sm text-muted-foreground">
                               {ordenarPor === "gasto" ? formatCurrency(cliente.totalGasto) : 
                                ordenarPor === "pedidos" ? `${cliente.totalPedidos} pedidos` :

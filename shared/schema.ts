@@ -747,6 +747,73 @@ export const insertExtratoConsumoSchema = createInsertSchema(extratoConsumo).omi
 export type ExtratoConsumo = typeof extratoConsumo.$inferSelect;
 export type InsertExtratoConsumo = z.infer<typeof insertExtratoConsumoSchema>;
 
+// Configuração Fiscal (SEFAZ)
+export const configuracaoFiscal = pgTable("configuracao_fiscal", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }).unique(),
+  cnpj: text("cnpj"),
+  inscricaoEstadual: text("inscricao_estadual"),
+  inscricaoMunicipal: text("inscricao_municipal"),
+  razaoSocial: text("razao_social"),
+  nomeFantasia: text("nome_fantasia"),
+  certificadoDigital: text("certificado_digital"), // Base64 do certificado
+  senhaCertificado: text("senha_certificado"), // Senha do certificado (encriptada)
+  ambienteSefaz: text("ambiente_sefaz").default("homologacao"), // homologacao | producao
+  serieNfe: integer("serie_nfe").default(1),
+  serieNfce: integer("serie_nfce").default(1),
+  ultimoNumeroNfe: integer("ultimo_numero_nfe").default(0),
+  ultimoNumeroNfce: integer("ultimo_numero_nfce").default(0),
+  cscNfce: text("csc_nfce"), // Código de Segurança do Contribuinte
+  idTokenNfce: text("id_token_nfce"),
+  regimeTributario: text("regime_tributario").default("simples_nacional"), // simples_nacional | lucro_presumido | lucro_real
+  crt: integer("crt").default(1), // Código de Regime Tributário
+  enderecoUf: text("endereco_uf"),
+  enderecoMunicipio: text("endereco_municipio"),
+  enderecoCep: text("endereco_cep"),
+  enderecoLogradouro: text("endereco_logradouro"),
+  enderecoNumero: text("endereco_numero"),
+  enderecoBairro: text("endereco_bairro"),
+  codigoMunicipio: text("codigo_municipio"), // Código IBGE
+  ativo: boolean("ativo").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertConfiguracaoFiscalSchema = createInsertSchema(configuracaoFiscal).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type ConfiguracaoFiscal = typeof configuracaoFiscal.$inferSelect;
+export type InsertConfiguracaoFiscal = z.infer<typeof insertConfiguracaoFiscalSchema>;
+
+// Regras de automação por tenant
+export const regrasAutomacao = pgTable("regras_automacao", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  nome: text("nome").notNull(),
+  tipo: text("tipo").notNull(), // estoque_baixo | pedido_pronto | follow_up_crm | despacho_automatico
+  condicao: jsonb("condicao").$type<{
+    campo?: string;
+    operador?: string;
+    valor?: string | number;
+  }>(),
+  acao: jsonb("acao").$type<{
+    tipo: string;
+    parametros?: Record<string, any>;
+  }>(),
+  ativo: boolean("ativo").default(true),
+  prioridade: integer("prioridade").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertRegraAutomacaoSchema = createInsertSchema(regrasAutomacao).omit({
+  id: true,
+  createdAt: true,
+});
+export type RegraAutomacao = typeof regrasAutomacao.$inferSelect;
+export type InsertRegraAutomacao = z.infer<typeof insertRegraAutomacaoSchema>;
+
 // API externa para receber pedidos (WhatsApp, n8n, CrewAI)
 export const pedidoExternoSchema = z.object({
   cliente_nome: z.string().min(1, "Nome do cliente é obrigatório"),

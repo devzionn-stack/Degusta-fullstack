@@ -1,0 +1,175 @@
+Arquitetura Visual & Layout
+
+Information Density Control (IDC)
+
+Progressive Density Disclosure
+
+Z-Pattern + F-Pattern Hybrid Layout
+
+Functional Zoning Layout
+
+Command Surface Design
+
+Persistent Context Panels
+
+Split-Brain Interface
+
+Multi-Layer Canvas UI
+
+Context-Aware Layout Switching
+
+Focus Mode Rendering
+
+🎛️ Componentes & Interação
+
+Stateful UI Components
+
+Inline Action Surfaces
+
+Direct Manipulation UI
+
+Zero-Modal Interaction
+
+Contextual Micro-Controls
+
+Smart Default Injection
+
+One-Action Rule Builders
+
+Visual State Machines
+
+Gesture-Driven Controls (Desktop)
+
+Command Palette System (⌘K-style)
+
+🎨 Estética Avançada & Legibilidade
+
+Semantic Color Mapping
+
+Contrast Laddering
+
+Functional Color Coding
+
+Adaptive Dark UI (True Dark, not Theme)
+
+Depth by Elevation (Z-Axis UI)
+
+Micro-Shadow Hierarchy
+
+Glassmorphism Funcional (não decorativo)
+
+Soft-Neumorphism Industrial
+
+Precision Typography Scaling
+
+Optical Alignment Correction
+
+🧠 Informação & Leitura Rápida
+
+Visual Priority Encoding
+
+Pre-Attentive Attributes
+
+Data-to-Ink Ratio Optimization
+
+Visual Anchoring
+
+Peripheral Awareness UI
+
+Temporal Heat Mapping
+
+Threshold Highlighting
+
+Predictive Highlighting
+
+Inline Trend Indicators
+
+Micro-Sparkline Embedding
+
+⚡ Feedback & Sensação de Controle
+
+Instant Visual Acknowledgment
+
+Action-to-Impact Feedback
+
+Micro-State Transitions
+
+Haptic-Style Visual Feedback
+
+Non-Blocking Async Feedback
+
+Progressive Confirmation UI
+
+Visual Latency Masking
+
+Success Bias Feedback
+
+Failure Containment UI
+
+Optimistic UI Rendering
+
+🧩 Complexidade Sob Controle
+
+Progressive Disclosure
+
+Complexity Collapsing
+
+Rule Visualization UI
+
+Visual Dependency Mapping
+
+Cognitive Load Balancing
+
+Decision Surface Reduction
+
+Hierarchical Interaction Scaling
+
+Intent-Based Navigation
+
+Contextual Shortcut Surfacing
+
+Mental Model Preservation UI
+
+📊 Dashboards & Operação Pesada
+
+Situation-Aware Dashboards
+
+Single-Glance Panels
+
+KPI Compression Techniques
+
+Dynamic Threshold Lines
+
+Anomaly Emphasis Rendering
+
+Comparative Overlay UI
+
+Temporal Compression Views
+
+Drill-Through Without Context Loss
+
+Live Data Layering
+
+Real-Time State Mirroring
+
+🧱 UX Industrial / Mission Critical
+
+Control-Room UI Patterns
+
+Safety-Critical Color Protocols
+
+Redundancy by Design
+
+Error-Proofing UI (Poka-Yoke)
+
+Fail-Safe Interaction Design
+
+Confirmation Gradient System
+
+Irreversible Action Isolation
+
+Visual Risk Signaling
+
+Cognitive Failover UI
+
+Operator-Centric Design

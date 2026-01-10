@@ -13,6 +13,9 @@ import { iniciarCronETA } from "./eta_cron";
 import { iniciarCronAlertaChegada } from "./alerta_chegada";
 import { iniciarCronML } from "./ml_pipeline";
 import { iniciarCronReenvioWebhooks } from "./webhook_service";
+import { initScheduler } from "./automation_scheduler";
+import { inicializarSmartDispatch } from "./smart_dispatch";
+import "./external_adapter";
 
 const app = express();
 const httpServer = createServer(app);
@@ -139,6 +142,8 @@ app.use((req, res, next) => {
       iniciarCronAlertaChegada();
       iniciarCronML();
       iniciarCronReenvioWebhooks();
+      initScheduler();
+      inicializarSmartDispatch();
     },
   );
 })();

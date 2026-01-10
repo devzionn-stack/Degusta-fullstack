@@ -26,6 +26,10 @@ import {
   type SystemLog,
   type InsertSystemLog,
   type TemplateEtapasKDS,
+  type ConfiguracaoFiscal,
+  type InsertConfiguracaoFiscal,
+  type RegraAutomacao,
+  type InsertRegraAutomacao,
   users,
   tenants,
   clientes,
@@ -40,6 +44,8 @@ import {
   alertasFrota,
   systemLogs,
   templatesEtapasKDS,
+  configuracaoFiscal,
+  regrasAutomacao,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, inArray, sql } from "drizzle-orm";
