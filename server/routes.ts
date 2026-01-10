@@ -3006,11 +3006,60 @@ export async function registerRoutes(
       await registrarInicioPreparoPedido(tenantId, pedidoId);
       
       const pedido = await storage.getPedido(pedidoId, tenantId);
-      if (pedido) {
+      
+      let itensDetalhados: any[] = [];
+      
+      if (pedido && pedido.itens) {
+        const { criarItemPedidoComDiagrama, buscarFilaProducao } = await import("./diagrama_pizza_service");
+        const { itensPedidoDetalhados } = await import("@shared/schema");
+        
+        const itensExistentes = await db
+          .select()
+          .from(itensPedidoDetalhados)
+          .where(and(
+            eq(itensPedidoDetalhados.tenantId, tenantId),
+            eq(itensPedidoDetalhados.pedidoId, pedidoId)
+          ));
+        
+        if (itensExistentes.length === 0) {
+          for (const item of pedido.itens) {
+            if (item.sabores && Array.isArray(item.sabores) && item.sabores.length > 0) {
+              const saboresInput = item.sabores.map((s: any) => ({
+                pizza_id: s.pizza_id,
+                fracao: s.fracao,
+              }));
+              const itemDiagrama = await criarItemPedidoComDiagrama(
+                tenantId,
+                pedidoId,
+                saboresInput,
+                item.precoUnitario || 0
+              );
+              itensDetalhados.push(itemDiagrama);
+            } else if (item.produtoId) {
+              const saboresInput = [{ pizza_id: item.produtoId, fracao: 1 }];
+              const itemDiagrama = await criarItemPedidoComDiagrama(
+                tenantId,
+                pedidoId,
+                saboresInput,
+                item.precoUnitario || 0
+              );
+              itensDetalhados.push(itemDiagrama);
+            }
+          }
+        } else {
+          itensDetalhados = itensExistentes;
+        }
+        
         broadcastOrderStatusChange(tenantId, pedido);
+        broadcastKDSUpdate(tenantId, "novo_pedido_kds", { pedidoId });
       }
 
-      res.json({ success: true, message: "Preparo iniciado" });
+      res.json({ 
+        success: true, 
+        message: "Preparo iniciado",
+        itensDetalhados: itensDetalhados.length,
+        pedidoId
+      });
     } catch (error) {
       console.error("Error starting prep:", error);
       res.status(500).json({ error: "Failed to start prep" });

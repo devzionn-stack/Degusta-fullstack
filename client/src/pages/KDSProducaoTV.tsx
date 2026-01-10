@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,8 @@ import {
   WifiOff,
   Brain,
   Loader2,
-  Lightbulb
+  Lightbulb,
+  ArrowLeft
 } from "lucide-react";
 
 interface Ingrediente {
@@ -72,6 +73,7 @@ interface InstrucoesPreparo {
 
 export default function KDSProducaoTV() {
   const params = useParams<{ tenantId?: string }>();
+  const [, navigate] = useLocation();
   const [filaProducao, setFilaProducao] = useState<FilaProducao>({ emProducao: null, fila: [] });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [somAtivo, setSomAtivo] = useState(true);
@@ -323,6 +325,15 @@ export default function KDSProducaoTV() {
     <div className="min-h-screen bg-black text-white p-6">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => navigate("/cozinha")}
+            className="border-gray-600 hover:bg-gray-800"
+            data-testid="button-voltar-kds"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
           <ChefHat className="w-10 h-10 text-orange-500" />
           <div>
             <h1 className="text-3xl font-bold">SISTEMA DE MONTAGEM</h1>

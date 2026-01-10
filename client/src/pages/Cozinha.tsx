@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useLayoutEffect } from "react";
+import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,10 +18,20 @@ import {
   Minimize2,
   Volume2,
   VolumeX,
-  Gauge
+  Gauge,
+  Tv,
+  X
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import PedidoCardKDS from "@/components/PedidoCardKDS";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface PedidoItem {
   produtoId: string | null;
@@ -77,10 +88,13 @@ export default function Cozinha() {
   const { toast } = useToast();
   const { setTheme } = useTheme();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const [isConnected, setIsConnected] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [updatingPedidoId, setUpdatingPedidoId] = useState<string | null>(null);
+  const [showTVModal, setShowTVModal] = useState(false);
+  const [pedidoPreparoId, setPedidoPreparoId] = useState<string | null>(null);
   const hasTenant = !!user?.tenantId;
 
   useLayoutEffect(() => {
@@ -163,13 +177,15 @@ export default function Cozinha() {
       if (!res.ok) throw new Error("Failed to start preparo");
       return res.json();
     },
-    onSuccess: (_, pedidoId) => {
+    onSuccess: (data, pedidoId) => {
       queryClient.invalidateQueries({ queryKey: ["pedidos-cozinha"] });
       queryClient.invalidateQueries({ queryKey: ["pedidos"] });
       queryClient.invalidateQueries({ queryKey: ["dpt-realtime"] });
+      setPedidoPreparoId(pedidoId);
+      setShowTVModal(true);
       toast({
         title: "Preparo iniciado",
-        description: `Pedido #${pedidoId.slice(0, 8)} em preparo - DPT ativo`,
+        description: `Pedido #${pedidoId.slice(0, 8)} em preparo - ${data.itensDetalhados || 0} pizza(s) na fila`,
       });
     },
     onError: () => {
@@ -347,6 +363,11 @@ export default function Cozinha() {
   const avgLoop = producaoStatusData.length > 0
     ? Math.round(producaoStatusData.reduce((sum, p) => sum + p.numeroLoop, 0) / producaoStatusData.length)
     : 0;
+
+  const handleGoToTV = () => {
+    setShowTVModal(false);
+    navigate("/kds/tv");
+  };
 
   const KDSContent = () => (
     <div className="space-y-4 md:space-y-6">
@@ -572,6 +593,38 @@ export default function Cozinha() {
   return (
     <DashboardLayout>
       <KDSContent />
+      
+      <Dialog open={showTVModal} onOpenChange={setShowTVModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tv className="w-5 h-5 text-orange-500" />
+              Pizza em Preparo
+            </DialogTitle>
+            <DialogDescription>
+              O pedido #{pedidoPreparoId?.slice(0, 8)} foi enviado para a fila de produção.
+              Deseja abrir a tela de montagem na TV?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setShowTVModal(false)}
+              data-testid="button-modal-ficar"
+            >
+              Continuar aqui
+            </Button>
+            <Button
+              onClick={handleGoToTV}
+              className="bg-orange-600 hover:bg-orange-700"
+              data-testid="button-modal-ir-tv"
+            >
+              <Tv className="w-4 h-4 mr-2" />
+              Ir para TV
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
