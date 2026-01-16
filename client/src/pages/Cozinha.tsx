@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useLayoutEffect } from "react";
+import { useEffect, useState, useCallback, useLayoutEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,7 +20,8 @@ import {
   VolumeX,
   Gauge,
   Tv,
-  X
+  Plus,
+  Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import PedidoCardKDS from "@/components/PedidoCardKDS";
@@ -32,6 +33,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 interface PedidoItem {
   produtoId: string | null;
@@ -83,6 +94,27 @@ interface ProducaoStatus {
   tempoRestante: number;
 }
 
+interface Cliente {
+  id: string;
+  nome: string;
+  telefone?: string;
+  endereco?: string;
+}
+
+interface Produto {
+  id: string;
+  nome: string;
+  preco: string;
+  categoria?: string;
+}
+
+interface ItemPedido {
+  produtoId: string;
+  nome: string;
+  quantidade: number;
+  precoUnitario: number;
+}
+
 export default function Cozinha() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -95,6 +127,15 @@ export default function Cozinha() {
   const [updatingPedidoId, setUpdatingPedidoId] = useState<string | null>(null);
   const [showTVModal, setShowTVModal] = useState(false);
   const [pedidoPreparoId, setPedidoPreparoId] = useState<string | null>(null);
+  const [showInsertDialog, setShowInsertDialog] = useState(false);
+  const [selectedCliente, setSelectedCliente] = useState<string>("");
+  const [tipoEntrega, setTipoEntrega] = useState<"delivery" | "balcao">("balcao");
+  const [endereco, setEndereco] = useState("");
+  const [selectedProduto, setSelectedProduto] = useState<string>("");
+  const [quantidade, setQuantidade] = useState(1);
+  const [itensPedido, setItensPedido] = useState<ItemPedido[]>([]);
+  const [observacoes, setObservacoes] = useState("");
+  const exampleOrdersCreatedRef = useRef(false);
   const hasTenant = !!user?.tenantId;
 
   useLayoutEffect(() => {
@@ -111,6 +152,190 @@ export default function Cozinha() {
     enabled: hasTenant,
     refetchInterval: 30000,
   });
+
+  const { data: clientes = [] } = useQuery<Cliente[]>({
+    queryKey: ["clientes"],
+    queryFn: async () => {
+      const res = await fetch(`/api/clientes`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch clientes");
+      return res.json();
+    },
+    enabled: hasTenant,
+  });
+
+  const { data: produtosPizza = [] } = useQuery<Produto[]>({
+    queryKey: ["produtos-pizza"],
+    queryFn: async () => {
+      const res = await fetch(`/api/produtos`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch produtos");
+      const produtos: Produto[] = await res.json();
+      return produtos.filter(p => p.categoria?.toLowerCase() === "pizza");
+    },
+    enabled: hasTenant,
+  });
+
+  const criarPedido = useMutation({
+    mutationFn: async (pedidoData: {
+      clienteId?: string;
+      status: string;
+      total: number;
+      itens: ItemPedido[];
+      observacoes?: string;
+      enderecoEntrega?: string;
+      origem: string;
+    }) => {
+      const res = await fetch(`/api/pedidos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(pedidoData),
+      });
+      if (!res.ok) throw new Error("Failed to create pedido");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pedidos-cozinha"] });
+      queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+      setShowInsertDialog(false);
+      resetForm();
+      toast({
+        title: "Pedido criado",
+        description: "O pedido foi adicionado à fila da cozinha",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Não foi possível criar o pedido",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetForm = () => {
+    setSelectedCliente("");
+    setTipoEntrega("balcao");
+    setEndereco("");
+    setSelectedProduto("");
+    setQuantidade(1);
+    setItensPedido([]);
+    setObservacoes("");
+  };
+
+  const adicionarItem = () => {
+    if (!selectedProduto) return;
+    const produto = produtosPizza.find(p => p.id === selectedProduto);
+    if (!produto) return;
+    
+    setItensPedido(prev => [
+      ...prev,
+      {
+        produtoId: produto.id,
+        nome: produto.nome,
+        quantidade,
+        precoUnitario: parseFloat(produto.preco),
+      }
+    ]);
+    setSelectedProduto("");
+    setQuantidade(1);
+  };
+
+  const removerItem = (index: number) => {
+    setItensPedido(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const calcularTotal = () => {
+    return itensPedido.reduce((acc, item) => acc + item.precoUnitario * item.quantidade, 0);
+  };
+
+  const handleCriarPedido = () => {
+    if (itensPedido.length === 0) {
+      toast({
+        title: "Erro",
+        description: "Adicione pelo menos um item ao pedido",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    criarPedido.mutate({
+      clienteId: selectedCliente === "balcao" ? undefined : selectedCliente || undefined,
+      status: "recebido",
+      total: calcularTotal(),
+      itens: itensPedido,
+      observacoes: observacoes || undefined,
+      enderecoEntrega: tipoEntrega === "delivery" ? endereco : undefined,
+      origem: "cozinha",
+    });
+  };
+
+  useEffect(() => {
+    if (!hasTenant || isLoading || exampleOrdersCreatedRef.current) return;
+    
+    const pedidosRecebidos = pedidos.filter(p => p.status === "recebido");
+    const quantidadeFaltante = 3 - pedidosRecebidos.length;
+    
+    if (quantidadeFaltante > 0 && produtosPizza.length > 0) {
+      exampleOrdersCreatedRef.current = true;
+      
+      const defaultPizza = produtosPizza[0];
+      const pizza2 = produtosPizza[1] || defaultPizza;
+      const pizza3 = produtosPizza[2] || defaultPizza;
+      
+      const todosExemplos = [
+        {
+          status: "recebido",
+          total: parseFloat(defaultPizza.preco),
+          itens: [{
+            produtoId: defaultPizza.id,
+            nome: defaultPizza.nome,
+            quantidade: 1,
+            precoUnitario: parseFloat(defaultPizza.preco),
+          }],
+          observacoes: "Pedido exemplo - João Silva",
+          origem: "cozinha",
+        },
+        {
+          status: "recebido",
+          total: parseFloat(defaultPizza.preco) + parseFloat(pizza2.preco),
+          itens: [
+            {
+              produtoId: defaultPizza.id,
+              nome: defaultPizza.nome,
+              quantidade: 1,
+              precoUnitario: parseFloat(defaultPizza.preco),
+            },
+            {
+              produtoId: pizza2.id,
+              nome: pizza2.nome,
+              quantidade: 1,
+              precoUnitario: parseFloat(pizza2.preco),
+            }
+          ],
+          observacoes: "Pedido exemplo - Maria Souza",
+          origem: "cozinha",
+        },
+        {
+          status: "recebido",
+          total: parseFloat(pizza3.preco),
+          itens: [{
+            produtoId: pizza3.id,
+            nome: pizza3.nome,
+            quantidade: 1,
+            precoUnitario: parseFloat(pizza3.preco),
+          }],
+          observacoes: "Pedido exemplo - Pedro Santos",
+          origem: "cozinha",
+        },
+      ];
+      
+      const pedidosParaCriar = todosExemplos.slice(0, quantidadeFaltante);
+      
+      pedidosParaCriar.forEach(pedido => {
+        criarPedido.mutate(pedido);
+      });
+    }
+  }, [hasTenant, isLoading, pedidos, produtosPizza]);
 
   const updateStatus = useMutation({
     mutationFn: async ({ pedidoId, status }: { pedidoId: string; status: string }) => {
@@ -353,7 +578,6 @@ export default function Cozinha() {
 
   const totalPendentes = pedidosByStatus.recebido.length + pedidosByStatus.em_preparo.length;
   
-  const atrasados = dptRealtimeData.filter(d => d.atrasado).length;
   const avgProgress = dptRealtimeData.length > 0 
     ? Math.round(dptRealtimeData.reduce((sum, d) => sum + d.progresso, 0) / dptRealtimeData.length)
     : 0;
@@ -462,6 +686,16 @@ export default function Cozinha() {
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             Atualizar
+          </Button>
+
+          <Button 
+            onClick={() => setShowInsertDialog(true)}
+            className="bg-green-600 hover:bg-green-700"
+            size="sm"
+            data-testid="button-inserir-pedido"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Inserir Pedido
           </Button>
 
           <Button 
@@ -631,6 +865,168 @@ export default function Cozinha() {
             >
               <Tv className="w-4 h-4 mr-2" />
               Ir para TV
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showInsertDialog} onOpenChange={setShowInsertDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2" data-testid="dialog-title-inserir-pedido">
+              <Plus className="w-5 h-5 text-green-500" />
+              Inserir Novo Pedido
+            </DialogTitle>
+            <DialogDescription>
+              Adicione pizzas e informações do pedido
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="cliente" data-testid="label-cliente">Cliente</Label>
+              <Select value={selectedCliente} onValueChange={setSelectedCliente} data-testid="select-cliente">
+                <SelectTrigger id="cliente" data-testid="select-trigger-cliente">
+                  <SelectValue placeholder="Selecione um cliente" />
+                </SelectTrigger>
+                <SelectContent data-testid="select-content-cliente">
+                  <SelectItem value="balcao" data-testid="select-item-balcao">Cliente Balcão</SelectItem>
+                  {clientes.map(cliente => (
+                    <SelectItem key={cliente.id} value={cliente.id} data-testid={`select-item-cliente-${cliente.id}`}>
+                      {cliente.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tipoEntrega" data-testid="label-tipo-entrega">Tipo de Entrega</Label>
+              <Select value={tipoEntrega} onValueChange={(v: "delivery" | "balcao") => setTipoEntrega(v)} data-testid="select-tipo-entrega">
+                <SelectTrigger id="tipoEntrega" data-testid="select-trigger-tipo-entrega">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent data-testid="select-content-tipo-entrega">
+                  <SelectItem value="balcao" data-testid="select-item-tipo-balcao">Balcão</SelectItem>
+                  <SelectItem value="delivery" data-testid="select-item-tipo-delivery">Delivery</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {tipoEntrega === "delivery" && (
+              <div className="space-y-2">
+                <Label htmlFor="endereco" data-testid="label-endereco">Endereço de Entrega</Label>
+                <Input
+                  id="endereco"
+                  value={endereco}
+                  onChange={(e) => setEndereco(e.target.value)}
+                  placeholder="Digite o endereço completo"
+                  data-testid="input-endereco"
+                />
+              </div>
+            )}
+
+            <div className="border-t pt-4 space-y-4">
+              <h4 className="font-medium" data-testid="section-itens">Itens do Pedido</h4>
+              
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Select value={selectedProduto} onValueChange={setSelectedProduto} data-testid="select-produto">
+                    <SelectTrigger data-testid="select-trigger-produto">
+                      <SelectValue placeholder="Selecione uma pizza" />
+                    </SelectTrigger>
+                    <SelectContent data-testid="select-content-produto">
+                      {produtosPizza.map(produto => (
+                        <SelectItem key={produto.id} value={produto.id} data-testid={`select-item-produto-${produto.id}`}>
+                          {produto.nome} - R$ {parseFloat(produto.preco).toFixed(2)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Input
+                  type="number"
+                  min={1}
+                  value={quantidade}
+                  onChange={(e) => setQuantidade(parseInt(e.target.value) || 1)}
+                  className="w-20"
+                  data-testid="input-quantidade"
+                />
+                <Button
+                  type="button"
+                  onClick={adicionarItem}
+                  disabled={!selectedProduto}
+                  data-testid="button-adicionar-item"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+
+              {itensPedido.length > 0 && (
+                <div className="space-y-2" data-testid="lista-itens">
+                  {itensPedido.map((item, index) => (
+                    <div key={index} className="flex items-center justify-between bg-muted p-2 rounded" data-testid={`item-pedido-${index}`}>
+                      <span className="text-sm" data-testid={`text-item-${index}`}>
+                        {item.quantidade}x {item.nome} - R$ {(item.precoUnitario * item.quantidade).toFixed(2)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removerItem(index)}
+                        data-testid={`button-remover-item-${index}`}
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="text-right font-semibold" data-testid="text-total">
+                    Total: R$ {calcularTotal().toFixed(2)}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="observacoes" data-testid="label-observacoes">Observações</Label>
+              <Textarea
+                id="observacoes"
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                placeholder="Observações do pedido (opcional)"
+                rows={3}
+                data-testid="textarea-observacoes"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowInsertDialog(false);
+                resetForm();
+              }}
+              data-testid="button-cancelar-pedido"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCriarPedido}
+              disabled={itensPedido.length === 0 || criarPedido.isPending}
+              className="bg-green-600 hover:bg-green-700"
+              data-testid="button-criar-pedido"
+            >
+              {criarPedido.isPending ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Criando...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Criar Pedido
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
