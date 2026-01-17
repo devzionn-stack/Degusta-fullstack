@@ -30,6 +30,10 @@ import {
   type InsertConfiguracaoFiscal,
   type RegraAutomacao,
   type InsertRegraAutomacao,
+  type Ingrediente,
+  type InsertIngrediente,
+  type AuditLogIngrediente,
+  type InsertAuditLogIngrediente,
   users,
   tenants,
   clientes,
@@ -46,6 +50,8 @@ import {
   templatesEtapasKDS,
   configuracaoFiscal,
   regrasAutomacao,
+  ingredientes,
+  auditLogIngredientes,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, or, inArray, sql } from "drizzle-orm";
@@ -161,6 +167,13 @@ export interface IStorage {
   createTemplateEtapasKDS(tenantId: string, data: { categoria: string; etapas: any[] }): Promise<TemplateEtapasKDS>;
   updateTemplateEtapasKDS(id: string, tenantId: string, data: { etapas: any[] }): Promise<TemplateEtapasKDS | null>;
   deleteTemplateEtapasKDS(id: string, tenantId: string): Promise<void>;
+  
+  getIngredientes(tenantId: string): Promise<Ingrediente[]>;
+  getIngrediente(id: string, tenantId: string): Promise<Ingrediente | undefined>;
+  createIngrediente(ingrediente: InsertIngrediente): Promise<Ingrediente>;
+  updateIngrediente(id: string, tenantId: string, data: Partial<InsertIngrediente>): Promise<Ingrediente | undefined>;
+  deleteIngrediente(id: string, tenantId: string): Promise<void>;
+  createAuditLogIngrediente(log: InsertAuditLogIngrediente): Promise<AuditLogIngrediente>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -960,6 +973,54 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(templatesEtapasKDS)
       .where(and(eq(templatesEtapasKDS.id, id), eq(templatesEtapasKDS.tenantId, tenantId)));
+  }
+
+  async getIngredientes(tenantId: string): Promise<Ingrediente[]> {
+    return await db
+      .select()
+      .from(ingredientes)
+      .where(eq(ingredientes.tenantId, tenantId))
+      .orderBy(desc(ingredientes.createdAt));
+  }
+
+  async getIngrediente(id: string, tenantId: string): Promise<Ingrediente | undefined> {
+    const [ingrediente] = await db
+      .select()
+      .from(ingredientes)
+      .where(and(eq(ingredientes.id, id), eq(ingredientes.tenantId, tenantId)));
+    return ingrediente || undefined;
+  }
+
+  async createIngrediente(insertIngrediente: InsertIngrediente): Promise<Ingrediente> {
+    const [ingrediente] = await db
+      .insert(ingredientes)
+      .values(insertIngrediente)
+      .returning();
+    return ingrediente;
+  }
+
+  async updateIngrediente(id: string, tenantId: string, data: Partial<InsertIngrediente>): Promise<Ingrediente | undefined> {
+    const [updated] = await db
+      .update(ingredientes)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(ingredientes.id, id), eq(ingredientes.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteIngrediente(id: string, tenantId: string): Promise<void> {
+    await db
+      .update(ingredientes)
+      .set({ ativo: false, updatedAt: new Date() })
+      .where(and(eq(ingredientes.id, id), eq(ingredientes.tenantId, tenantId)));
+  }
+
+  async createAuditLogIngrediente(log: InsertAuditLogIngrediente): Promise<AuditLogIngrediente> {
+    const [auditLog] = await db
+      .insert(auditLogIngredientes)
+      .values(log)
+      .returning();
+    return auditLog;
   }
 }
 

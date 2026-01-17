@@ -230,9 +230,87 @@ export const ingredientes = pgTable("ingredientes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   nome: text("nome").notNull(),
-  unidade: text("unidade").default('g'),
+  categoria: text("categoria").default('outros'), // queijos, carnes, vegetais, ovos, molhos, doces, base
+  unidade: text("unidade").default('g'), // g, ml, unidade
   custoUnitario: decimal("custo_unitario", { precision: 10, scale: 4 }),
+  gramaturaInteira: decimal("gramatura_inteira", { precision: 10, scale: 2 }), // gramatura padrão por pizza inteira
+  gramaturaMeia: decimal("gramatura_meia", { precision: 10, scale: 2 }), // gramatura por meia pizza
+  corVisual: text("cor_visual"), // cor para diagrama visual (hex)
+  estoqueAtual: decimal("estoque_atual", { precision: 12, scale: 3 }).default("0"), // estoque em unidade base
+  estoqueMinimo: decimal("estoque_minimo", { precision: 12, scale: 3 }).default("0"),
+  ativo: boolean("ativo").default(true),
   idExternoEstoque: text("id_externo_estoque"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Porções processadas (matéria-prima → porções padronizadas)
+export const porcoes = pgTable("porcoes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  ingredienteId: varchar("ingrediente_id").notNull().references(() => ingredientes.id, { onDelete: "cascade" }),
+  codigoPorcao: text("codigo_porcao").notNull(), // ex: "CAL-001", "MUS-002"
+  gramatura: decimal("gramatura", { precision: 10, scale: 2 }).notNull(), // gramas ou unidades
+  quantidadeDisponivel: integer("quantidade_disponivel").default(0),
+  quantidadeReservada: integer("quantidade_reservada").default(0),
+  dataProcessamento: timestamp("data_processamento").defaultNow().notNull(),
+  dataValidade: timestamp("data_validade"),
+  lote: text("lote"),
+  status: text("status").default("disponivel"), // disponivel, reservado, consumido, descartado
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Processamentos de matéria-prima (entrada de estoque → porções)
+export const processamentos = pgTable("processamentos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  ingredienteId: varchar("ingrediente_id").notNull().references(() => ingredientes.id, { onDelete: "cascade" }),
+  usuarioId: varchar("usuario_id").references(() => users.id, { onDelete: "set null" }),
+  quantidadeEntrada: decimal("quantidade_entrada", { precision: 12, scale: 3 }).notNull(), // quantidade bruta processada
+  unidadeEntrada: text("unidade_entrada").default("kg"),
+  porcoesGeradas: integer("porcoes_geradas").notNull(), // quantas porções foram criadas
+  gramaturaPorcao: decimal("gramatura_porcao", { precision: 10, scale: 2 }).notNull(),
+  perdaPercentual: decimal("perda_percentual", { precision: 5, scale: 2 }), // % de perda no processamento
+  custoTotal: decimal("custo_total", { precision: 10, scale: 2 }),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Reservas de porções (quando pizza entra em produção)
+export const reservasPorcoes = pgTable("reservas_porcoes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  pedidoId: varchar("pedido_id").notNull().references(() => pedidos.id, { onDelete: "cascade" }),
+  itemPedidoId: varchar("item_pedido_id"),
+  ingredienteId: varchar("ingrediente_id").notNull().references(() => ingredientes.id, { onDelete: "cascade" }),
+  quantidadeReservada: decimal("quantidade_reservada", { precision: 10, scale: 3 }).notNull(),
+  status: text("status").default("reservado"), // reservado, consumido, liberado
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  consumidoEm: timestamp("consumido_em"),
+});
+
+// Sequência de montagem estruturada (substitui texto livre)
+export const sequenciaMontagem = pgTable("sequencia_montagem", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  produtoId: varchar("produto_id").notNull().references(() => produtos.id, { onDelete: "cascade" }),
+  ordem: integer("ordem").notNull(),
+  ingredienteId: varchar("ingrediente_id").notNull().references(() => ingredientes.id, { onDelete: "cascade" }),
+  instrucao: text("instrucao"), // instrução opcional
+  tempoSegundos: integer("tempo_segundos").default(30),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Log de auditoria de alterações em ingredientes
+export const auditLogIngredientes = pgTable("audit_log_ingredientes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  ingredienteId: varchar("ingrediente_id").notNull().references(() => ingredientes.id, { onDelete: "cascade" }),
+  usuarioId: varchar("usuario_id").references(() => users.id, { onDelete: "set null" }),
+  acao: text("acao").notNull(), // criacao, edicao, exclusao, ajuste_estoque
+  camposAlterados: jsonb("campos_alterados").$type<Record<string, { antes: any; depois: any }>>(),
+  motivo: text("motivo"),
+  ip: text("ip"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -530,6 +608,32 @@ export const insertEtapaProducaoSchema = createInsertSchema(etapasProducao).omit
 export const insertIngredienteSchema = createInsertSchema(ingredientes).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPorcaoSchema = createInsertSchema(porcoes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProcessamentoSchema = createInsertSchema(processamentos).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertReservaPorcaoSchema = createInsertSchema(reservasPorcoes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSequenciaMontagemSchema = createInsertSchema(sequenciaMontagem).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAuditLogIngredienteSchema = createInsertSchema(auditLogIngredientes).omit({
+  id: true,
+  createdAt: true,
 });
 
 export const insertReceitaIngredienteSchema = createInsertSchema(receitasIngredientes).omit({
@@ -542,6 +646,21 @@ export type InsertEtapaProducao = z.infer<typeof insertEtapaProducaoSchema>;
 
 export type Ingrediente = typeof ingredientes.$inferSelect;
 export type InsertIngrediente = z.infer<typeof insertIngredienteSchema>;
+
+export type Porcao = typeof porcoes.$inferSelect;
+export type InsertPorcao = z.infer<typeof insertPorcaoSchema>;
+
+export type Processamento = typeof processamentos.$inferSelect;
+export type InsertProcessamento = z.infer<typeof insertProcessamentoSchema>;
+
+export type ReservaPorcao = typeof reservasPorcoes.$inferSelect;
+export type InsertReservaPorcao = z.infer<typeof insertReservaPorcaoSchema>;
+
+export type SequenciaMontagem = typeof sequenciaMontagem.$inferSelect;
+export type InsertSequenciaMontagem = z.infer<typeof insertSequenciaMontagemSchema>;
+
+export type AuditLogIngrediente = typeof auditLogIngredientes.$inferSelect;
+export type InsertAuditLogIngrediente = z.infer<typeof insertAuditLogIngredienteSchema>;
 
 export type ReceitaIngrediente = typeof receitasIngredientes.$inferSelect;
 export type InsertReceitaIngrediente = z.infer<typeof insertReceitaIngredienteSchema>;

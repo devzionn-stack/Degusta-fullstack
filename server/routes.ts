@@ -14,10 +14,12 @@ import {
   insertProdutoSchema,
   insertPedidoSchema,
   insertMotoboySchema,
+  insertIngredienteSchema,
   loginSchema,
   registerSchema,
   webhookPedidoSchema,
   webhookIndicadorSchema,
+  auditLogIngredientes,
 } from "@shared/schema";
 import { iniciarRastreamento, generateSimulatedTrackingData } from "./n2n-service";
 import { fromZodError } from "zod-validation-error";
@@ -1444,6 +1446,136 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete motoboy" });
+    }
+  });
+
+  // ============================================
+  // INGREDIENTES ROUTES (Multi-tenant with Audit Logging)
+  // ============================================
+
+  app.get("/api/ingredientes", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const ingredientesList = await storage.getIngredientes(tenantId);
+      res.json(ingredientesList);
+    } catch (error) {
+      res.status(500).json({ error: "Falha ao buscar ingredientes" });
+    }
+  });
+
+  app.get("/api/ingredientes/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const ingrediente = await storage.getIngrediente(req.params.id, tenantId);
+      if (!ingrediente) {
+        return res.status(404).json({ error: "Ingrediente não encontrado" });
+      }
+      res.json(ingrediente);
+    } catch (error) {
+      res.status(500).json({ error: "Falha ao buscar ingrediente" });
+    }
+  });
+
+  app.post("/api/ingredientes", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const userId = req.user!.id;
+      const ip = req.ip || req.headers['x-forwarded-for'] as string || 'unknown';
+      const { motivo, ...ingredienteData } = req.body;
+      
+      const validation = insertIngredienteSchema.safeParse({ ...ingredienteData, tenantId });
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: fromZodError(validation.error).toString() 
+        });
+      }
+      
+      const ingrediente = await storage.createIngrediente(validation.data);
+      
+      await storage.createAuditLogIngrediente({
+        tenantId,
+        ingredienteId: ingrediente.id,
+        usuarioId: userId,
+        acao: 'criacao',
+        camposAlterados: null,
+        motivo: motivo || null,
+        ip,
+      });
+      
+      res.status(201).json(ingrediente);
+    } catch (error) {
+      console.error("Erro ao criar ingrediente:", error);
+      res.status(500).json({ error: "Falha ao criar ingrediente" });
+    }
+  });
+
+  app.put("/api/ingredientes/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const userId = req.user!.id;
+      const ip = req.ip || req.headers['x-forwarded-for'] as string || 'unknown';
+      const { motivo, ...updateData } = req.body;
+      
+      const ingredienteAntigo = await storage.getIngrediente(req.params.id, tenantId);
+      if (!ingredienteAntigo) {
+        return res.status(404).json({ error: "Ingrediente não encontrado" });
+      }
+      
+      const camposAlterados: Record<string, { antes: any; depois: any }> = {};
+      for (const [key, valorNovo] of Object.entries(updateData)) {
+        const valorAntigo = (ingredienteAntigo as any)[key];
+        if (valorAntigo !== valorNovo) {
+          camposAlterados[key] = { antes: valorAntigo, depois: valorNovo };
+        }
+      }
+      
+      const ingredienteAtualizado = await storage.updateIngrediente(req.params.id, tenantId, updateData);
+      
+      await storage.createAuditLogIngrediente({
+        tenantId,
+        ingredienteId: req.params.id,
+        usuarioId: userId,
+        acao: 'edicao',
+        camposAlterados: Object.keys(camposAlterados).length > 0 ? camposAlterados : null,
+        motivo: motivo || null,
+        ip,
+      });
+      
+      res.json(ingredienteAtualizado);
+    } catch (error) {
+      console.error("Erro ao atualizar ingrediente:", error);
+      res.status(500).json({ error: "Falha ao atualizar ingrediente" });
+    }
+  });
+
+  app.delete("/api/ingredientes/:id", requireAuth, requireTenant, async (req, res) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const userId = req.user!.id;
+      const ip = req.ip || req.headers['x-forwarded-for'] as string || 'unknown';
+      const { motivo } = req.body || {};
+      
+      const ingrediente = await storage.getIngrediente(req.params.id, tenantId);
+      if (!ingrediente) {
+        return res.status(404).json({ error: "Ingrediente não encontrado" });
+      }
+      
+      await storage.deleteIngrediente(req.params.id, tenantId);
+      
+      await storage.createAuditLogIngrediente({
+        tenantId,
+        ingredienteId: req.params.id,
+        usuarioId: userId,
+        acao: 'exclusao',
+        camposAlterados: { ativo: { antes: true, depois: false } },
+        motivo: motivo || null,
+        ip,
+      });
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Erro ao deletar ingrediente:", error);
+      res.status(500).json({ error: "Falha ao deletar ingrediente" });
     }
   });
 

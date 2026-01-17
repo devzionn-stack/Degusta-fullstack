@@ -1,0 +1,269 @@
+PAPEL DA I.A (FORÇADO)
+
+Você agora atua como:
+
+Arquiteto de Sistemas ERP para Produção Alimentar
+
+Especialista em controle de estoque por gramatura
+
+Arquiteto de UX técnico para KDS (Kitchen Display System)
+
+Engenheiro de dados aplicado a operações físicas
+
+Você deve pensar em execução real, não em conceito.
+
+2️⃣ OBJETIVO DO PROMPT
+
+Gerar um PLANO DE EXECUÇÃO COMPLETO para implementar:
+
+Cadastro estruturado de ingredientes com ID único
+
+Processamento de matéria-prima em porções padronizadas
+
+Controle de estoque automático por gramatura
+
+Integração com pedidos e KDS
+
+Geração de diagrama visual inteligente da pizza
+
+Sequência de montagem guiada por sistema (sem texto confuso)
+
+Redução de erro humano e erro visual
+
+3️⃣ CONTEXTO OPERACIONAL
+
+O sistema é um ERP inteligente para pizzarias, com:
+
+Pizzas padrão e pizzas personalizadas
+
+Pedidos que entram via:
+
+PDV
+
+WhatsApp
+
+API externa (n8n, LangChain, CrewAI)
+
+Produção controlada via KDS
+
+Estoque baseado em consumo real por pizza produzida
+
+4️⃣ ESCOPO FUNCIONAL OBRIGATÓRIO
+🧩 4.1 Ingredientes e Banco de Dados
+
+Cada ingrediente deve possuir:
+
+ID numérico único
+
+Nome
+
+Unidade base (kg, g, ml)
+
+Custo por unidade
+
+Status (ativo/inativo)
+
+Todos os ingredientes do cardápio devem:
+
+Ser inseridos no banco de dados
+
+Poder ser editados manualmente apenas com senha administrativa
+
+Alterações devem gerar:
+
+Log de auditoria
+
+Data, usuário e motivo
+
+🧩 4.2 Processamento de Matéria-Prima
+
+Ingredientes brutos devem ser:
+
+Processados em porções padronizadas
+
+Cada porção deve possuir:
+
+ID próprio
+
+Gramatura fixa
+
+Ingrediente de origem
+
+Quando a matéria-prima for processada:
+
+O sistema deve dar baixa do ingrediente bruto
+
+Inserir automaticamente as porções no estoque
+
+O estoque passa a operar por porção, não por peso bruto
+
+🧩 4.3 Gramatura e Padronização
+
+Cada pizza deve ter:
+
+Gramatura definida por ingrediente
+
+Associação clara entre:
+
+Pizza
+
+Sabor
+
+Porções utilizadas
+
+As porções devem ser:
+
+Individuais por pizza
+
+Identificadas numericamente
+
+O sistema deve impedir:
+
+Uso de porção inexistente
+
+Uso acima do estoque disponível
+
+5️⃣ DIAGRAMA VISUAL DA PIZZA (KDS + DISPLAY)
+🧠 Lógica do Diagrama
+
+Cada pizza deve gerar um diagrama visual
+
+O diagrama deve conter:
+
+Pizza dividida em lado esquerdo e lado direito
+
+Regras:
+
+Pizza com 1 sabor → o mesmo sabor ocupa os dois lados
+
+Pizza com múltiplos sabores → cada lado recebe um sabor (ou mais, conforme regra futura)
+
+Cada sabor será representado por:
+
+Um ID do sabor
+
+Uma cor única
+
+🎨 Regras de Cores (Colometria)
+
+Cada sabor recebe:
+
+Uma cor gerada aleatoriamente
+
+Nenhuma cor pode ser igual ou visualmente conflitante
+
+O sistema deve aplicar:
+
+Estudos de colometria
+
+Contraste mínimo
+
+Evitar ilusões óticas entre sabores próximos
+
+Objetivo:
+
+O operador não pode confundir sabores visualmente
+
+🧩 Representação no Diagrama
+
+No diagrama deve aparecer:
+
+A cor do ingrediente/sabor
+
+O nome do ingrediente
+
+O ID numérico da porção
+
+Exemplo:
+
+“Molho Amarelo”
+
+Cor: Amarelo específico
+
+ID da porção visível no diagrama
+
+6️⃣ SEQUÊNCIA DE MONTAGEM (SUBSTITUI TEXTO LIVRE)
+
+O sistema NÃO deve apenas “explicar” a pizza
+
+Deve gerar uma sequência de montagem estruturada, contendo:
+
+Ordem exata dos ingredientes
+
+Nome do ingrediente
+
+ID da porção
+
+Cor correspondente
+
+Essa sequência será exibida:
+
+No KDS
+
+Na tela de produção / televisão
+
+O operador executa etapa por etapa
+
+Cada etapa pode ser confirmada manualmente
+
+7️⃣ INTEGRAÇÃO COM ESTOQUE E CUSTOS
+
+Quando a pizza entra em produção:
+
+As porções previstas ficam “reservadas”
+
+Quando a pizza é finalizada:
+
+O sistema dá baixa definitiva no estoque
+
+Registra:
+
+Ingredientes usados
+
+Custo total da pizza
+
+Esse custo deve refletir:
+
+No cliente
+
+No histórico de consumo
+
+No relatório de rentabilidade
+
+8️⃣ O QUE VOCÊ DEVE ENTREGAR (OBRIGATÓRIO)
+
+No plano de execução, descreva:
+
+Modelo de dados completo
+
+Tabelas
+
+Relacionamentos
+
+Fluxo de processamento da matéria-prima
+
+Fluxo de criação da pizza (pedido → KDS → diagrama)
+
+Lógica do diagrama visual
+
+Regras de cores e prevenção de erro visual
+
+Gatilhos de estoque
+
+Riscos e mitigação
+
+Checklist de implementação
+
+9️⃣ REGRAS CRÍTICAS
+
+Pensar em ambiente real de cozinha
+
+Considerar erro humano
+
+Considerar múltiplas unidades (white label)
+
+Não assumir operador técnico
+
+Priorizar clareza visual extrema
+
+O sistema deve “pensar antes do humano”

@@ -1,0 +1,217 @@
+Lista canônica de INGREDIENTES (base única do banco)
+
+Cada ingrediente tem:
+
+ingredient_id
+
+nome
+
+categoria
+
+unidade_base (g, ml, unidade)
+
+gramatura_padrao_por_pizza_inteira
+
+gramatura_por_meia_pizza
+
+cor_base_visual (para colometria / diagrama)
+
+🔹 Queijos
+
+Mussarela
+
+Mussarela de búfala
+
+Catupiry
+
+Requeijão
+
+Provolone
+
+Parmesão
+
+Gorgonzola
+
+🔹 Carnes
+
+Calabresa
+
+Pepperoni
+
+Presunto
+
+Bacon
+
+Frango
+
+Lombo
+
+Peito de peru
+
+Atum
+
+Carne seca
+
+🔹 Vegetais / Legumes
+
+Cebola
+
+Tomate
+
+Tomate seco
+
+Milho
+
+Palmito
+
+Champignon
+
+Brócolis
+
+Escarola
+
+Abobrinha
+
+Berinjela
+
+Ervilha
+
+Alho
+
+🔹 Ovos
+
+Ovo
+
+🔹 Molhos e bases
+
+Molho de tomate
+
+Molho branco (opcional)
+
+🔹 Doces
+
+Chocolate
+
+Chocolate granulado
+
+Leite condensado
+
+Goiabada
+
+Banana
+
+Morango
+
+Canela
+
+Castanha de caju
+
+Nozes
+
+Uva passa
+
+2️⃣ Porções PADRÃO (fundamental para estoque inteligente)
+
+Esses valores são o coração do ERP.
+Você pode ajustar depois, mas o agente precisa partir daqui.
+
+🍕 Base fixa (toda pizza salgada)
+Ingrediente	Pizza inteira	Meia pizza
+Massa	1 unidade	½ unidade
+Molho de tomate	120g	60g
+Mussarela base	180g	90g
+🧀 Queijos adicionais (quando citados no sabor)
+Ingrediente	Inteira	Meia
+Catupiry	80g	40g
+Requeijão	70g	35g
+Provolone	60g	30g
+Parmesão	25g	12g
+Gorgonzola	50g	25g
+Mussarela de búfala	150g	75g
+🥩 Carnes
+Ingrediente	Inteira	Meia
+Calabresa	120g	60g
+Pepperoni	100g	50g
+Presunto	100g	50g
+Bacon	90g	45g
+Frango	120g	60g
+Lombo	110g	55g
+Peito de peru	100g	50g
+Atum	120g	60g
+Carne seca	100g	50g
+🥦 Vegetais / Complementos
+Ingrediente	Inteira	Meia
+Cebola	40g	20g
+Tomate	50g	25g
+Tomate seco	35g	18g
+Milho	50g	25g
+Palmito	60g	30g
+Champignon	50g	25g
+Brócolis	70g	35g
+Escarola	60g	30g
+Abobrinha	60g	30g
+Berinjela	60g	30g
+Ervilha	40g	20g
+Alho	5g	2g
+🍳 Ovos
+Ingrediente	Inteira	Meia
+Ovo	2 unid	1 unid
+🍫 Doces (pizza doce não usa molho)
+Ingrediente	Inteira	Meia
+Chocolate	180g	90g
+Leite condensado	120g	60g
+Goiabada	150g	75g
+Banana	2 unid	1 unid
+Morango	120g	60g
+Chocolate granulado	30g	15g
+Canela	2g	1g
+Castanha / Nozes	25g	12g
+Uva passa	20g	10g
+3️⃣ Estrutura lógica de CADA PIZZA (para o sistema)
+
+O sistema NÃO precisa de regra por nome, e sim por composição.
+
+Exemplo — Calabresa
+{
+  "pizza_id": 12,
+  "nome": "Calabresa",
+  "porcoes": [
+    { "ingredient_id": "massa", "qtd": 1 },
+    { "ingredient_id": "molho_tomate", "qtd": 120 },
+    { "ingredient_id": "mussarela", "qtd": 180 },
+    { "ingredient_id": "calabresa", "qtd": 120 },
+    { "ingredient_id": "cebola", "qtd": 40 }
+  ]
+}
+
+Exemplo — Meia Portuguesa / Meia Frango
+
+Diagrama esquerdo → Portuguesa
+
+Diagrama direito → Frango
+
+Cada lado:
+
+Usa ½ porção
+
+Cor visual exclusiva por ingrediente
+
+ID numérico exibido no diagrama
+
+4️⃣ Regra-mãe para o ERP (isso é ouro)
+
+❌ Nunca cadastrar pizza como entidade fixa
+
+✅ Pizza = combinação dinâmica de porções
+
+Estoque baixa:
+
+no processamento do ingrediente
+
+e no uso da porção
+
+Qualquer ajuste manual:
+
+exige senha
+
+gera log de auditoria
