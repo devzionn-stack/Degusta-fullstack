@@ -1,0 +1,7 @@
+node_modules
+dist
+.git
+.replit
+replit.md
+*.zip
+.env
