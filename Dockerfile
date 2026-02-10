@@ -1,32 +1,48 @@
+# Estágio 1: Builder
+# Este estágio instala todas as dependências e constrói o projeto.
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copiar arquivos de dependências
-COPY package.json package-lock.json ./
+# Copia os arquivos de definição de pacotes
+COPY package*.json ./
 
-# Instalar dependências (incluindo devDependencies para o build)
+# Instala todas as dependências (incluindo devDependencies para o build e prisma)
 RUN npm install
 
-# Copiar o restante do código
+# Copia todo o restante do código-fonte
 COPY . .
 
-# Build do projeto (frontend e backend)
+# Executa o comando de build (se houver, como compilar TypeScript, etc.)
 RUN npm run build
 
-# Estágio final
+
+# Estágio 2: Final
+# Este estágio cria a imagem final, mais leve, apenas com o necessário para rodar.
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Copiar apenas o necessário do estágio de build
+# Copia os artefatos construídos do estágio 'builder'
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
-COPY --from=builder /app/server/rls-setup.sql ./server/rls-setup.sql
+
+# --- NOSSAS MODIFICAÇÕES ESTÃO AQUI ---
+
+# 1. Copia o script de entrypoint para dentro da imagem final
+COPY entrypoint.sh .
+
+# 2. Garante que o script tenha permissão de execução
+RUN chmod +x ./entrypoint.sh
+
+# 3. Define o nosso script como o "ponto de entrada" do contêiner
+ENTRYPOINT ["./entrypoint.sh"]
+
+# --- FIM DAS MODIFICAÇÕES ---
 
 # Expor a porta do backend
 EXPOSE 5000
 
-# Comando para iniciar a aplicação
-CMD sh -c "npx prisma migrate deploy && npm start"
+# Comando padrão que será passado para o nosso script de entrypoint
+CMD ["npm", "start"]
