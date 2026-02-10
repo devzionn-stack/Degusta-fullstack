@@ -1,46 +1,31 @@
-# Estágio 1: Builder
-# Este estágio instala todas as dependências e constrói o projeto.
-FROM node:20-alpine AS builder
+# Usa uma imagem base completa do Node.js versão 20
+FROM node:20
 
+# Define o diretório de trabalho dentro do contêiner
 WORKDIR /app
 
-# Copia os arquivos de definição de pacotes
+# Copia os arquivos de definição de pacotes primeiro para otimizar o cache
 COPY package*.json ./
 
-# Instala todas as dependências
+# Instala TODAS as dependências, incluindo as de desenvolvimento (como o Prisma)
 RUN npm install
 
-# Copia todo o restante do código-fonte (incluindo o entrypoint.sh)
+# Copia TODO o restante do código-fonte para o diretório de trabalho
+# Isso inclui o 'entrypoint.sh', a pasta 'prisma', etc.
 COPY . .
 
-# Executa o comando de build
+# Executa o comando de build, se houver (para compilar TypeScript, etc.)
 RUN npm run build
 
-
-# Estágio 2: Final
-# Este estágio cria a imagem final, mais leve.
-FROM node:20-alpine
-
-WORKDIR /app
-
-# Copia os artefatos construídos do estágio 'builder'
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
-
-# --- CORREÇÃO ESTÁ AQUI ---
-# Copia o script de entrypoint do estágio 'builder' para a imagem final
-COPY --from=builder /app/entrypoint.sh .
-# --- FIM DA CORREÇÃO ---
-
-# Garante que o script tenha permissão de execução
+# Garante que o script de entrypoint tenha permissão de execução
 RUN chmod +x ./entrypoint.sh
 
-# Define o nosso script como o "ponto de entrada" do contêiner
-ENTRYPOINT ["./entrypoint.sh"]
-
-# Expor a porta do backend
+# Expor a porta que a aplicação usa
 EXPOSE 5000
 
-# Comando padrão que será passado para o nosso script de entrypoint
+# Define o nosso script como o "ponto de entrada" do contêiner.
+# Este comando será executado toda vez que o contêiner iniciar.
+ENTRYPOINT ["./entrypoint.sh"]
+
+# Define o comando padrão que será passado para o nosso script de entrypoint
 CMD ["npm", "start"]
