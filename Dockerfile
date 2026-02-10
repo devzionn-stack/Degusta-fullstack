@@ -14,13 +14,11 @@ WORKDIR /app
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
-
-# --- A LINHA DA SOLUÇÃO ESTÁ AQUI ---
-# Copia a pasta 'prisma' (com o schema.prisma) para a imagem final
 COPY --from=builder /app/prisma ./prisma
 
 # Expor a porta
 EXPOSE 5000
 
-# Comando para iniciar a aplicação
-CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
+# --- A LINHA DA SOLUÇÃO ESTÁ AQUI ---
+# Comando para iniciar a aplicação, especificando o caminho do schema
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=./prisma/schema.prisma && npm start"]
