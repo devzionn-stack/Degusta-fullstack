@@ -1,39 +1,41 @@
 # Início do arquivo docker-compose.yml
 
-version: '3.8' # Define a versão do Docker Compose
-
 services:
-  # SERVIÇO 1: Sua aplicação (já existia, mas foi modificada)
+  # SERVIÇO 1: Sua aplicação
   app:
     build:
       context: .
       dockerfile: Dockerfile
     restart: always
     ports:
-      - "5000:5000" # Expõe a porta 5000 da sua app para a porta 5000 da VPS
+      - "5000:5000"
     environment:
-      # ATENÇÃO: A URL do banco agora é interna, apontando para o serviço 'db'
-      DATABASE_URL: "postgresql://pizzaiolo:Trumpnegroamigodoputim@db:5432/degusta_db"
+      # --- VARIÁVEIS DEFINIDAS DIRETAMENTE AQUI ---
       
-      # Estas variáveis ainda precisam ser configuradas no painel da Hostinger
-      SESSION_SECRET: ${SESSION_SECRET}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-    depends_on:
-      - db # Garante que o serviço 'db' inicie ANTES do serviço 'app'
+      # 1. URL do Banco de Dados (aponta para o serviço 'db' abaixo)
+      DATABASE_URL: "postgresql://pizzaiolo:SuaSenhaSuperForte123@db:5432/degusta_db"
+      
+      # 2. Chave Secreta da Sessão (cole seu valor aqui)
+      SESSION_SECRET: "zG3B3D~87]Dw"
+      
+      # 3. Chave da OpenAI (cole sua chave aqui)
+      OPENAI_API_KEY: "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"
 
-  # SERVIÇO 2: O banco de dados PostgreSQL (novo)
+    depends_on:
+      - db
+
+  # SERVIÇO 2: O banco de dados PostgreSQL
   db:
-    image: postgres:15 # Usa a imagem oficial e estável do PostgreSQL
+    image: postgres:15
     restart: always
     environment:
-      # Estas variáveis criam o banco de dados e o usuário DENTRO do contêiner do Postgres
+      # Estas variáveis criam o banco e o usuário. Use a MESMA senha da DATABASE_URL.
       POSTGRES_DB: degusta_db
       POSTGRES_USER: pizzaiolo
-      POSTGRES_PASSWORD: Trumpnegroamigodoputim # Use a MESMA senha definida na DATABASE_URL acima
+      POSTGRES_PASSWORD: SuaSenhaSuperForte123
     volumes:
-      - postgres_data:/var/lib/postgresql/data # Mapeia os dados do banco para um volume persistente
+      - postgres_data:/var/lib/postgresql/data
 
-# Seção final para declarar o volume que vai guardar os dados
 volumes:
   postgres_data:
 
