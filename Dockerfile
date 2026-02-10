@@ -7,18 +7,18 @@ WORKDIR /app
 # Copia os arquivos de definição de pacotes
 COPY package*.json ./
 
-# Instala todas as dependências (incluindo devDependencies para o build e prisma)
+# Instala todas as dependências
 RUN npm install
 
-# Copia todo o restante do código-fonte
+# Copia todo o restante do código-fonte (incluindo o entrypoint.sh)
 COPY . .
 
-# Executa o comando de build (se houver, como compilar TypeScript, etc.)
+# Executa o comando de build
 RUN npm run build
 
 
 # Estágio 2: Final
-# Este estágio cria a imagem final, mais leve, apenas com o necessário para rodar.
+# Este estágio cria a imagem final, mais leve.
 FROM node:20-alpine
 
 WORKDIR /app
@@ -28,18 +28,16 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 
-# --- NOSSAS MODIFICAÇÕES ESTÃO AQUI ---
+# --- CORREÇÃO ESTÁ AQUI ---
+# Copia o script de entrypoint do estágio 'builder' para a imagem final
+COPY --from=builder /app/entrypoint.sh .
+# --- FIM DA CORREÇÃO ---
 
-# 1. Copia o script de entrypoint para dentro da imagem final
-COPY entrypoint.sh .
-
-# 2. Garante que o script tenha permissão de execução
+# Garante que o script tenha permissão de execução
 RUN chmod +x ./entrypoint.sh
 
-# 3. Define o nosso script como o "ponto de entrada" do contêiner
+# Define o nosso script como o "ponto de entrada" do contêiner
 ENTRYPOINT ["./entrypoint.sh"]
-
-# --- FIM DAS MODIFICAÇÕES ---
 
 # Expor a porta do backend
 EXPOSE 5000
