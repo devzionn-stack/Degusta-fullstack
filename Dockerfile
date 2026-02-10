@@ -29,4 +29,4 @@ COPY --from=builder /app/server/rls-setup.sql ./server/rls-setup.sql
 EXPOSE 5000
 
 # Comando para iniciar a aplicação
-CMD ["npm", "start"]
+CMD sh -c "npx prisma migrate deploy && npm start"
